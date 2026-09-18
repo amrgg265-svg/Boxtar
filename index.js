@@ -69,6 +69,10 @@ const protectionSettings = new Map();
 const jailSettings = new Map();
 const jailedUsers = new Map();
 
+// قواعد بيانات الكلمات الممنوعة والعقوبات
+const badWordsDB = new Map(); // guildId -> Set of words
+const badWordsPunishment = new Map(); // guildId -> 'timeout' | 'kick' | 'ban' | 'delete'
+
 const azkarList = [
   "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ العَظِيمِ.",
   "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ العَلِيِّ العَظِيمِ.",
@@ -88,22 +92,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('shortcut')
-    .setDescription('إنشاء اختصار مخصص لأحد الأوامر الإدارية')
-    .addStringOption(opt => 
-      opt.setName('الأمر_الأصلي')
-        .setDescription('اختر الأمر المراد عمل اختصار له')
-        .setRequired(true)
-        .addChoices(
-          { name: 'حظر (ban)', value: 'ban' },
-          { name: 'طرد (kick)', value: 'kick' },
-          { name: 'كتم مؤقت (timeout)', value: 'timeout' },
-          { name: 'تحذير (warn)', value: 'warn' },
-          { name: 'مسح رسائل (clear)', value: 'clear' },
-          { name: 'قفل القناة (lock)', value: 'lock' },
-          { name: 'فتح القناة (unlock)', value: 'unlock' }
-        )
-    )
-    .addStringOption(opt => opt.setName('الاسم_المختصر').setDescription('اكتب الكلمة الاختصارية').setRequired(true))
+    .setDescription('لوحة أزرار تفاعلية لإنشاء وإدارة اختصارات جميع الأوامر الإدارية')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder().setName('تقديم').setDescription('إدارة وتخصيص لوحات التقديم الأربعة'),
@@ -130,7 +119,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('bad-words')
-    .setDescription('إدارة قائمة الكلمات المحظورة والعقوبات')
+    .setDescription('لوحة التحكم الكاملة بالكلمات المحظورة والعقوبات التلقائية')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
@@ -288,6 +277,8 @@ client.on('interactionCreate', async interaction => {
               name: '🛡️ الأوامر الإدارية والحماية', 
               value: '`/admin-setup` : تحديد الرتب المصرح لها بالأوامر.\n' +
                      '`/protection` : إعدادات حماية السبام والروابط.\n' +
+                     '`/bad-words` : لوحة الكلمات المحظورة والعقوبات بالأزرار.\n' +
+                     '`/shortcut` : لوحة أزرار اختصارات جميع الأوامر.\n' +
                      '`/ban` / `/kick` : الحظر والطرد مع السجلات.\n' +
                      '`/timeout` / `/untimeout` : الكتم ورفع الكتم.\n' +
                      '`/warn` / `/unwarn` : التحذيرات وإزالتها.\n' +
@@ -320,6 +311,52 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
 
         return interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+      }
+
+      // ==========================================
+      // لوحة الكلمات المحظورة الجديدة (Bad Words Panel)
+      // ==========================================
+      if (commandName === 'bad-words') {
+        await interaction.deferReply({ ephemeral: true });
+        const currentPunish = badWordsPunishment.get(guild.id) || 'delete';
+        const wordsSet = badWordsDB.get(guild.id) || new Set();
+
+        const embed = new EmbedBuilder()
+          .setTitle('🚫 لوحة تحكم الكلمات المحظورة (Bad Words)')
+          .setDescription(`إجمالي الكلمات الممنوعة حالياً: **${wordsSet.size}** كلمة\nالعقوبة الحالية: \`${currentPunish.toUpperCase()}\``)
+          .setColor(0xE74C3C);
+
+        const row1 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('bw_add_word').setLabel('إضافة كلمة ممنوعة').setEmoji('➕').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('bw_list_words').setLabel('عرض جميع الكلمات').setEmoji('📋').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('bw_set_punishment').setLabel('تحديد العقوبة').setEmoji('⚖️').setStyle(ButtonStyle.Secondary)
+        );
+
+        const row2 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('bw_remove_word').setLabel('إزالة كلمة').setEmoji('➖').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('bw_clear_all').setLabel('إلغاء وإفريغ الكل').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
+        );
+
+        return interaction.editReply({ embeds: [embed], components: [row1, row2] });
+      }
+
+      // ==========================================
+      // لوحة الاختصارات الجديدة الشاملة (Shortcuts Panel)
+      // ==========================================
+      if (commandName === 'shortcut') {
+        await interaction.deferReply({ ephemeral: true });
+        const embed = new EmbedBuilder()
+          .setTitle('⚡ لوحة إدارة اختصارات الأوامر الإدارية')
+          .setDescription('اختر الإجراء أدناه لإنشاء أو عرض أو حذف الاختصارات لجميع الأوامر:')
+          .setColor(0xE74C3C);
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('sc_create').setLabel('إنشاء اختصار جديد').setEmoji('🔗').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('sc_list').setLabel('عرض الاختصارات الحالية').setEmoji('📜').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('sc_delete').setLabel('حذف اختصار').setEmoji('❌').setStyle(ButtonStyle.Danger)
+        );
+
+        return interaction.editReply({ embeds: [embed], components: [row] });
       }
 
       if (commandName === 'protection') {
@@ -482,19 +519,6 @@ client.on('interactionCreate', async interaction => {
 
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.editReply({ embeds: [embed], components: [row] });
-      }
-
-      if (commandName === 'shortcut') {
-        const origCmd = options.getString('الأمر_الأصلي');
-        const customName = options.getString('الاسم_المختصر').toLowerCase().replace('!', '');
-        customShortcuts.set(`${guild.id}_${customName}`, origCmd);
-
-        const embed = new EmbedBuilder()
-          .setTitle('⚡ تم إنشاء الاختصار بنجاح!')
-          .setDescription(`أصبح يمكنك استخدام الاختصار: \`!${customName}\` لتنفيذ الأمر الإداري \`/${origCmd}\`.`)
-          .setColor(0x2ECC71);
-
-        return interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
       if (commandName === 'level-setup') {
@@ -752,8 +776,131 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === 'sc_select_command_menu') {
+        const selectedOrigCmd = interaction.values[0];
+        const modal = new ModalBuilder()
+          .setCustomId(`sc_modal_save_${selectedOrigCmd}`)
+          .setTitle(`إنشاء اختصار لـ /${selectedOrigCmd}`);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('shortcut_alias_input')
+              .setLabel('اكتب الاختصار (مثلاً: b أو k أو m)')
+              .setStyle(TextInputStyle.Short)
+              .setRequired(true)
+          )
+        );
+        return await interaction.showModal(modal);
+      }
+    }
+
     if (interaction.isButton()) {
       const id = interaction.customId;
+
+      // أزرار لوحة الكلمات المحظورة
+      if (id === 'bw_add_word') {
+        const modal = new ModalBuilder().setCustomId('bw_modal_add').setTitle('إضافة كلمة ممنوعة جديدة');
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('word_input').setLabel('اكتب الكلمة المراد حظرها').setStyle(TextInputStyle.Short).setRequired(true)
+          )
+        );
+        return await interaction.showModal(modal);
+      }
+
+      if (id === 'bw_list_words') {
+        const wordsSet = badWordsDB.get(interaction.guild.id) || new Set();
+        if (wordsSet.size === 0) return interaction.reply({ content: '❌ لا توجد أي كلمات ممنوعة مسجلة حالياً.', ephemeral: true });
+        const wordsArray = Array.from(wordsSet).map((w, index) => `${index + 1}. \`${w}\``).join('\n');
+        const embed = new EmbedBuilder().setTitle('📋 قائمة الكلمات المحظورة').setDescription(wordsArray).setColor(0xE74C3C);
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      if (id === 'bw_set_punishment') {
+        const embed = new EmbedBuilder().setTitle('⚖️ تحديد العقوبة التلقائية للكلمات الممنوعة').setDescription('اختر العقوبة المناسبة من الأزرار أدناه:').setColor(0xE74C3C);
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('bw_pun_delete').setLabel('حذف الرسالة فقط').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('bw_pun_timeout').setLabel('كتم العضو (Timeout)').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('bw_pun_kick').setLabel('طرد العضو (Kick)').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('bw_pun_ban').setLabel('حظر العضو (Ban)').setStyle(ButtonStyle.Danger)
+        );
+        return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      }
+
+      if (id.startsWith('bw_pun_')) {
+        const punType = id.replace('bw_pun_', '');
+        badWordsPunishment.set(interaction.guild.id, punType);
+        return interaction.reply({ content: `✅ تم تحديث عقوبة الكلمات الممنوعة إلى: **${punType.toUpperCase()}**`, ephemeral: true });
+      }
+
+      if (id === 'bw_remove_word') {
+        const modal = new ModalBuilder().setCustomId('bw_modal_remove').setTitle('إزالة كلمة من القائمة');
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('word_remove_input').setLabel('اكتب الكلمة المراد إزالتها').setStyle(TextInputStyle.Short).setRequired(true)
+          )
+        );
+        return await interaction.showModal(modal);
+      }
+
+      if (id === 'bw_clear_all') {
+        badWordsDB.set(interaction.guild.id, new Set());
+        badWordsPunishment.set(interaction.guild.id, 'delete');
+        return interaction.reply({ content: '🗑️ تم إفراغ وإلغاء جميع الكلمات المحظورة وإعادة ضبط العقوبات.', ephemeral: true });
+      }
+
+      // أزرار لوحة الاختصارات الشاملة لجميع الأوامر
+      if (id === 'sc_create') {
+        const embed = new EmbedBuilder()
+          .setTitle('🔗 اختيار الأمر لعمل اختصار له')
+          .setDescription('اختر الأمر الإداري من القائمة أدناه لتعيين اختصار خاص به:')
+          .setColor(0xE74C3C);
+
+        const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId('sc_select_command_menu')
+          .setPlaceholder('اختر الأمر الإداري...')
+          .addOptions(
+            { label: 'حظر (ban)', value: 'ban', emoji: '🔨' },
+            { label: 'طرد (kick)', value: 'kick', emoji: '👢' },
+            { label: 'كتم مؤقت (timeout)', value: 'timeout', emoji: '⏰' },
+            { label: 'رفع الكتم (untimeout)', value: 'untimeout', emoji: '🔊' },
+            { label: 'تحذير (warn)', value: 'warn', emoji: '⚠️' },
+            { label: 'مسح التحذيرات (unwarn)', value: 'unwarn', emoji: '🛡️' },
+            { label: 'تغيير اللقب (nick)', value: 'nick', emoji: '✏️' },
+            { label: 'سجن (jail)', value: 'jail', emoji: '⛓️' },
+            { label: 'إفراج السجن (unjail)', value: 'unjail', emoji: '🔓' },
+            { label: 'مسح رسائل (clear)', value: 'clear', emoji: '🧹' },
+            { label: 'قفل القناة (lock)', value: 'lock', emoji: '🔒' },
+            { label: 'فتح القناة (unlock)', value: 'unlock', emoji: '🔓' }
+          );
+
+        return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
+      }
+
+      if (id === 'sc_list') {
+        const guildShortcuts = Array.from(customShortcuts.entries()).filter(([k]) => k.startsWith(interaction.guild.id));
+        if (guildShortcuts.length === 0) return interaction.reply({ content: '❌ لا توجد أي اختصارات مسجلة في هذا السيرفر.', ephemeral: true });
+
+        const listText = guildShortcuts.map(([key, orig]) => {
+          const alias = key.replace(`${interaction.guild.id}_`, '');
+          return `🔹 الاختصار: \`!${alias}\` ➡️ الأمر: \`/${orig}\``;
+        }).join('\n');
+
+        const embed = new EmbedBuilder().setTitle('📜 قائمة الاختصارات النشطة').setDescription(listText).setColor(0xE74C3C);
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      if (id === 'sc_delete') {
+        const modal = new ModalBuilder().setCustomId('sc_modal_delete_alias').setTitle('حذف اختصار');
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('alias_to_delete').setLabel('اكتب اسم الاختصار المراد حذفه').setStyle(TextInputStyle.Short).setRequired(true)
+          )
+        );
+        return await interaction.showModal(modal);
+      }
 
       if (id === 'prot_toggle_links') {
         let current = protectionSettings.get(interaction.guild.id) || { antiSpam: false, antiLinks: false };
@@ -848,6 +995,42 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'bw_modal_add') {
+        const newWord = interaction.fields.getTextInputValue('word_input').trim().toLowerCase();
+        let wordsSet = badWordsDB.get(interaction.guild.id) || new Set();
+        wordsSet.add(newWord);
+        badWordsDB.set(interaction.guild.id, wordsSet);
+        return interaction.reply({ content: `✅ تم إضافة الكلمة \`${newWord}\` إلى قائمة الكلمات الممنوعة بنجاح!`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'bw_modal_remove') {
+        const wordToRemove = interaction.fields.getTextInputValue('word_remove_input').trim().toLowerCase();
+        let wordsSet = badWordsDB.get(interaction.guild.id) || new Set();
+        if (wordsSet.has(wordToRemove)) {
+          wordsSet.delete(wordToRemove);
+          badWordsDB.set(interaction.guild.id, wordsSet);
+          return interaction.reply({ content: `✅ تم إزالة الكلمة \`${wordToRemove}\` من القائمة بنجاح.`, ephemeral: true });
+        }
+        return interaction.reply({ content: `❌ الكلمة \`${wordToRemove}\` غير موجودة في القائمة أصلاً.`, ephemeral: true });
+      }
+
+      if (interaction.customId.startsWith('sc_modal_save_')) {
+        const origCmd = interaction.customId.replace('sc_modal_save_', '');
+        const alias = interaction.fields.getTextInputValue('shortcut_alias_input').toLowerCase().trim().replace('!', '');
+        customShortcuts.set(`${interaction.guild.id}_${alias}`, origCmd);
+        return interaction.reply({ content: `⚡ تم إنشاء الاختصار بنجاح! أصبح بإمكانك استخدام \`!${alias}\` لتنفيذ الأمر \`/${origCmd}\`.`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'sc_modal_delete_alias') {
+        const alias = interaction.fields.getTextInputValue('alias_to_delete').toLowerCase().trim().replace('!', '');
+        const key = `${interaction.guild.id}_${alias}`;
+        if (customShortcuts.has(key)) {
+          customShortcuts.delete(key);
+          return interaction.reply({ content: `✅ تم حذف الاختصار \`!${alias}\` بنجاح.`, ephemeral: true });
+        }
+        return interaction.reply({ content: `❌ الاختصار \`!${alias}\` غير موجود.`, ephemeral: true });
+      }
+
       if (interaction.customId === 'save_ticket_panel') {
         ticketData.set(interaction.guild.id, { title: interaction.fields.getTextInputValue('tk_title'), desc: interaction.fields.getTextInputValue('tk_desc') });
         return interaction.reply({ content: '✨ تم حفظ بيانات التذكرة بنجاح!', ephemeral: true });
@@ -887,10 +1070,41 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// نظام احتساب الـ XP والتفاعل (Levels System)
+// نظام الفحص التلقائي للرسائل (الكلمات المحظورة، الروابط، نظام الـ XP)
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
+  // فحص الكلمات المحظورة وتنفيذ العقوبة
+  const wordsSet = badWordsDB.get(message.guild.id);
+  if (wordsSet && wordsSet.size > 0 && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    const contentLower = message.content.toLowerCase();
+    let foundBadWord = false;
+    for (const word of wordsSet) {
+      if (contentLower.includes(word)) {
+        foundBadWord = true;
+        break;
+      }
+    }
+
+    if (foundBadWord) {
+      await message.delete().catch(() => {});
+      const punishment = badWordsPunishment.get(message.guild.id) || 'delete';
+      
+      if (punishment === 'timeout') {
+        await message.member.timeout(5 * 60 * 1000, 'استخدام كلمات محظورة').catch(() => {});
+      } else if (punishment === 'kick') {
+        await message.member.kick('استخدام كلمات محظورة').catch(() => {});
+      } else if (punishment === 'ban') {
+        await message.member.ban({ reason: 'استخدام كلمات محظورة' }).catch(() => {});
+      }
+
+      const warnMsg = await message.channel.send(`⚠️ ${message.author}، تم حذف رسالتك لاحتوائها على كلمات ممنوعة! (العقوبة: ${punishment.toUpperCase()})`);
+      setTimeout(() => warnMsg.delete().catch(() => {}), 4000);
+      return;
+    }
+  }
+
+  // فحص حماية الروابط
   const prot = protectionSettings.get(message.guild.id);
   if (prot && prot.antiLinks) {
     if (message.content.includes('http://') || message.content.includes('https://') || message.content.includes('discord.gg/')) {
@@ -903,6 +1117,32 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // فحص نظام الاختصارات المكتوبة بالشات (مثلاً !b أو !k)
+  if (message.content.startsWith('!')) {
+    const args = message.content.slice(1).trim().split(/ +/);
+    const alias = args.shift().toLowerCase();
+    const origCmd = customShortcuts.get(`${message.guild.id}_${alias}`);
+
+    if (origCmd) {
+      if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+      
+      if (origCmd === 'clear') {
+        const count = parseInt(args[0]) || 10;
+        await message.channel.bulkDelete(count, true).catch(() => {});
+        return message.channel.send(`🧹 تم مسح **${count}** رسالة عبر الاختصار.`).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
+      }
+      if (origCmd === 'lock') {
+        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+        return message.channel.send('🔒 **تم قفل الروم عبر الاختصار.**');
+      }
+      if (origCmd === 'unlock') {
+        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
+        return message.channel.send('🔓 **تم فتح الروم عبر الاختصار.**');
+      }
+    }
+  }
+
+  // نظام احتساب الـ XP والتفاعل (Levels System)
   const key = `${message.guild.id}_${message.author.id}`;
   let userData = userLevels.get(key) || { xp: 0, level: 0 };
   userData.xp += Math.floor(Math.random() * 10) + 15;
@@ -913,7 +1153,7 @@ client.on('messageCreate', async message => {
   if (userData.xp >= requiredXp) {
     userData.level += 1;
     userData.xp -= requiredXp;
-    message.channel.congratulations?.() || message.channel.send(`🎉 مبروك ${message.author}، لقد صعدت إلى المستوى **Level ${userData.level}**!`).catch(() => {});
+    message.channel.send(`🎉 مبروك ${message.author}، لقد صعدت إلى المستوى **Level ${userData.level}**!`).catch(() => {});
   }
   userLevels.set(key, userData);
 });
