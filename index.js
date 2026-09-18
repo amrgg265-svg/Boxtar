@@ -344,6 +344,7 @@ client.on('interactionCreate', async interaction => {
       }
 
       if (commandName === 'ticket-setup') {
+        await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder()
           .setTitle('🎫 اعدادات التكت')
           .setDescription('اعدادات التكت من هنا')
@@ -369,10 +370,11 @@ client.on('interactionCreate', async interaction => {
           new ButtonBuilder().setCustomId('tk_send_embed').setLabel('ارسال').setEmoji('🚀').setStyle(ButtonStyle.Success)
         );
 
-        return interaction.reply({ embeds: [embed], components: [row1, row2, row3, row4], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], components: [row1, row2, row3, row4] });
       }
 
       if (commandName === 'تقديم') {
+        await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder().setTitle('📂 لوحة التقديمات').setDescription('اختر التقديم لضبط إعداداته:').setColor(0x8E44AD);
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('app_cfg_1').setLabel('إعداد تقديم (1)').setStyle(ButtonStyle.Primary),
@@ -380,7 +382,7 @@ client.on('interactionCreate', async interaction => {
           new ButtonBuilder().setCustomId('app_cfg_3').setLabel('إعداد تقديم (3)').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId('app_cfg_4').setLabel('إعداد تقديم (4)').setStyle(ButtonStyle.Primary)
         );
-        return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+        return interaction.editReply({ embeds: [embed], components: [row] });
       }
 
       if (commandName === 'logs') {
@@ -466,7 +468,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `📌 **حدد الرتبة التي تريد منحها صلاحية استخدام أمر \`/${selectedCmd}\`:**`, components: [row], ephemeral: true });
       }
 
-      // قائمة اختيار لون الـ Embed
       if (interaction.customId === 'select_embed_color') {
         const colorVal = parseInt(interaction.values[0]);
         let current = ticketData.get(interaction.guild.id) || {};
@@ -475,7 +476,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '🎨 **تم تغيير لون الامبد بنجاح!**', ephemeral: true });
       }
 
-      // قائمة اختيار لون الزر
       if (interaction.customId === 'select_button_color') {
         const styleVal = parseInt(interaction.values[0]);
         let current = ticketData.get(interaction.guild.id) || {};
@@ -581,7 +581,6 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
-      // قائمة اختيار لون الامبد
       if (id === 'tk_set_embed_color') {
         const menu = new StringSelectMenuBuilder()
           .setCustomId('select_embed_color')
@@ -599,7 +598,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '🎨 **اختر اللون المطلوب للامبد:**', components: [row], ephemeral: true });
       }
 
-      // قائمة اختيار لون زر فتح التكت
       if (id === 'tk_set_btn_color') {
         const menu = new StringSelectMenuBuilder()
           .setCustomId('select_button_color')
@@ -869,7 +867,7 @@ client.on('interactionCreate', async interaction => {
             { label: 'Rename', description: 'تغيير اسم التذكرة', value: 't_rename', emoji: '📝' },
             { label: 'Rating', description: 'تقييم الإداري (مستلم التذكره)', value: 't_rating', emoji: '⭐' },
             { label: 'Close', description: 'غلق التذكرة', value: 't_close', emoji: '🔒' },
-            { label: 'Unclaim', description: 'إلغاء استلام التكت', value: 't_unclaim', emoji: '❌' },
+            { label: 'Unclaim', description: 'إلغاء استلاست التكت', value: 't_unclaim', emoji: '❌' },
             { label: 'Restart', description: 'إعادة تحميل القائمة', value: 't_restart', emoji: '🔄' }
           );
 
@@ -920,6 +918,8 @@ client.on('interactionCreate', async interaction => {
     console.error('حدث خطأ في معالجة التفاعل:', err);
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: '❌ حدث خطأ غير متوقع أثناء معالجة طلبك.', ephemeral: true }).catch(() => {});
+    } else if (interaction.deferred) {
+      await interaction.editReply({ content: '❌ حدث خطأ غير متوقع أثناء معالجة طلبك.' }).catch(() => {});
     }
   }
 });
