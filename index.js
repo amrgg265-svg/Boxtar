@@ -4,12 +4,18 @@
 const express = require('express');
 const app = express();
 
+// مسار رئيسي يعيد استجابة واضحة
 app.get('/', (req, res) => {
-  res.send('Boxtar Bot is active! 🚀');
+  res.status(200).send('Boxtar Bot is active! 🚀');
+});
+
+// إضافة مسار إضافي للاستجابة السريعة (Ping) لتجنب أي مشاكل في التوجيه
+app.get('/ping', (req, res) => {
+  res.status(200).send('PONG');
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
