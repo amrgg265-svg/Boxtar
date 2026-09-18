@@ -57,7 +57,7 @@ const applicationsData = new Map();
 const customShortcuts = new Map();    
 const commandRoles = new Map();        
 
-// تسجيل كافة الأوامر (مع إصلاح الأخطاء وإضافة الأوصاف للخانات)
+// تسجيل كافة الأوامر (بما فيها أمر /help)
 const commands = [
   new SlashCommandBuilder()
     .setName('admin-setup')
@@ -141,19 +141,22 @@ const commands = [
   new SlashCommandBuilder().setName('unlock').setDescription('فتح الروم الحالية'),
   new SlashCommandBuilder().setName('ping').setDescription('فحص سرعة استجابة البوت'),
 
-  // تم تصحيح وإضافة الوصف هنا ↓
   new SlashCommandBuilder()
     .setName('avatar')
     .setDescription('عرض صورة الحساب')
     .addUserOption(opt => opt.setName('العضو').setDescription('اختر العضو لعرض صورته').setRequired(false)),
 
-  // تم تصحيح وإضافة الوصف هنا ↓
   new SlashCommandBuilder()
     .setName('user-info')
     .setDescription('عرض تفاصيل الحساب')
     .addUserOption(opt => opt.setName('العضو').setDescription('اختر العضو لعرض معلوماته').setRequired(false)),
 
-  new SlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر')
+  new SlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
+
+  // أمر المساعدة الجديد
+  new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('يعرض لك قائمة بجميع أوامر البوت ووظائفها')
 ];
 
 function hasCommandPermission(member, commandName) {
@@ -183,6 +186,47 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.isChatInputCommand()) {
     const { commandName, options, guild, member, channel } = interaction;
+
+    // تفاعل وشرح أمر /help
+    if (commandName === 'help') {
+      const helpEmbed = new EmbedBuilder()
+        .setColor(0x00FF99)
+        .setTitle('🤖 دليل وقائمة أوامر بوت Boxtar')
+        .setDescription('أهلاً بك! إليك قائمة بجميع الأوامر المتاحة في البوت وشرح وظيفة كل أمر:')
+        .addFields(
+          { 
+            name: '🛡️ الأوامر الإدارية', 
+            value: '`/admin-setup` : تحديد الرتب المصرح لها باستخدام الأوامر الإدارية.\n' +
+                   '`/clear` : مسح عدد محدد من الرسائل في الروم.\n' +
+                   '`/kick` : طرد عضو من السيرفر.\n' +
+                   '`/warn` : إرسال تحذير إداري لعضو.\n' +
+                   '`/lock` / `/unlock` : قفل أو فتح الروم الحالي.\n' +
+                   '`/shortcut` : إنشاء اختصار مخصص للأوامر الإدارية.', 
+            inline: false 
+          },
+          { 
+            name: '⚙️ أوامر النظام والأعضاء', 
+            value: '`/afk` : تفعيل وضع الغياب AFK.\n' +
+                   '`/avatar` : عرض صورة الحساب الشخصية.\n' +
+                   '`/bad-words` : إدارة قائمة الكلمات المحظورة والعقوبات.\n' +
+                   '`/logs` : إعداد وتحديث قنوات السجلات الخاصة والأحداث.\n' +
+                   '`/server-info` : عرض معلومات السيرفر.\n' +
+                   '`/user-info` : عرض تفاصيل الحساب.\n' +
+                   '`/ping` : فحص سرعة استجابة البوت.', 
+            inline: false 
+          },
+          { 
+            name: '📝 الأوامر الخاصة', 
+            value: '`/تقديم` : إدارة وتخصيص لوحات تقديم الأربعة.\n' +
+                   '`/ticket-setup` : إدارة وتخصيص لوحات التذاكر.', 
+            inline: false 
+          }
+        )
+        .setFooter({ text: 'تم الطلب بواسطة ' + interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+    }
 
     if (commandName === 'admin-setup') {
       await interaction.deferReply({ ephemeral: true });
@@ -789,69 +833,23 @@ client.on('messageCreate', async message => {
     });
   }
 });
- 
-// تسجيل وتثبيت الأوامر بما فيها /help// تسجيل وتثبيت أمر /help
-const { REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
-(async () => {
-  try {
-    const commands = [
-      new SlashCommandBuilder()
-        .setName('help')
-        .setDescription('يعرض لك قائمة بجميع أوامر البوت ووظائفها')
-    ];
-
-    await rest.put(
-      Routes.applicationCommands(client.user.id),
-      { body: commands },
-    );
-    console.log('✅ تم تسجيل أمر /help بنجاح!');
-  } catch (error) {
-    console.error(error);
-  }
-})();
-
-// تسجيل وتثبيت الأوامر
+// ==========================================
+// 3. تسجيل الأوامر في ديسكورد وتشغيل البوت
+// ==========================================
 const TOKEN = process.env.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID || '1550180675871703080';
-
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
   try {
-    console.log('جاري تسجيل وتثبيت كافة الأوامر والميزات الحديثة...');
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+    console.log('🔄 جاري تسجيل وتثبيت كافة الأوامر والميزات (بما فيها /help)...');
+    await rest.put(
+      Routes.applicationCommands(client.user?.id || process.env.CLIENT_ID || '1550180675871703080'), 
+      { body: commands }
+    );
     console.log('✅ تم تسجيل النظام المطور بنجاح وجاهز للعمل بدون أي مشاكل!');
   } catch (err) {
-    console.error(err);
-  }
-})();
-// تسجيل وتثبيت الأوامر بما فيها /help وجاهزية البوت
-const { REST, Routes, SlashCommandBuilder } = require('discord.js');
-
-const TOKEN = process.env.TOKEN;
-const rest = new REST({ version: '10' }).setToken(TOKEN);
-
-(async () => {
-  try {
-    console.log('جاري تسجيل الأوامر والخصائص الحديثة...');
-    
-    const commands = [
-      new SlashCommandBuilder()
-        .setName('help')
-        .setDescription('يعرض لك قائمة بجميع أوامر البوت ووظائفها')
-    ];
-
-    await rest.put(
-      Routes.applicationCommands(client.user.id),
-      { body: commands },
-    );
-    
-    console.log('✅ تم تسجيل أمر /help وجاهز للعمل بدون أي مشاكل!');
-  } catch (err) {
-    console.error(err);
+    console.error('❌ خطأ أثناء تسجيل الأوامر:', err);
   }
 })();
 
