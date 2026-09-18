@@ -66,22 +66,20 @@ const levelRoles = new Map();
 
 const azkarSettings = new Map();
 const protectionSettings = new Map();
-const jailSettings = new Map();
-const jailedUsers = new Map();
 
-// قواعد بيانات الكلمات الممنوعة والعقوبات
-const badWordsDB = new Map(); // guildId -> Set of words
-const badWordsPunishment = new Map(); // guildId -> 'timeout' | 'kick' | 'ban' | 'delete'
+// تخزين بيانات السجن المتقدمة لكل سيرفر
+const jailSettings = new Map(); // guildId -> { roleId, jailerRoleId, textChannelId, logChannelId }
+const jailedUsers = new Map();  // `${guildId}_${userId}` -> array of removed role IDs
+
+const badWordsDB = new Map(); 
+const badWordsPunishment = new Map(); 
 
 const azkarList = [
   "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ العَظِيمِ.",
   "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ العَلِيِّ العَظِيمِ.",
   "أَسْتَغْفِرُ اللَّهَ العَظِيمَ وَأَتُوبُ إِلَيْهِ.",
   "لَا إِلَهَ إِلَّا اللَّه وحدَهُ لا شريكَ لهُ، لهُ الملكُ ولهُ الحمدُ وهوَ على كلِّ شيءٍ قديرٌ.",
-  "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ.",
-  "سُبْحَانَ اللَّهِ، وَالْحَمْدُ لِلَّهِ، وَلَا إِلَهَ إِلَّا اللَّهُ، وَاللَّهُ أَكْبَرُ.",
-  "اللَّهُمَّ أَنْتَ رَبِّي لا إِلَهَ إِلا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ.",
-  "رَبِّ اغْفِرْ لِي وَتُبْ عَلَيَّ إِنَّكَ أَنْتَ التَّوَّابُ الرَّحِيمُ."
+  "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ."
 ];
 
 const commands = [
@@ -203,18 +201,18 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('jail-setup')
-    .setDescription('إعداد نظام السجن ورتبته وغرفته')
+    .setDescription('لوحة إعداد نظام السجن الشامل (رتبة السجين، رتبة السجان، روم الكتابة، وسجل السجن)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('jail')
-    .setDescription('سجن عضو وسحب كافة رتبه')
+    .setDescription('سجن عضو وسحب كافة رتبه وتوثيق السجل')
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو المسجون').setRequired(true))
     .addStringOption(opt => opt.setName('السبب').setDescription('سبب السجن').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('unjail')
-    .setDescription('إفراج عن عضو مسجون وإعادة رتبه')
+    .setDescription('إفراج عن عضو مسجون وإعادة رتبه السابقة')
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو للإفراج عنه').setRequired(true)),
 
   new SlashCommandBuilder()
@@ -239,13 +237,6 @@ const commands = [
   new SlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
   new SlashCommandBuilder().setName('help').setDescription('يعرض لك قائمة بجميع أوامر البوت ووظائفها')
 ];
-
-function hasCommandPermission(member, commandName) {
-  if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
-  const requiredRoleId = commandRoles.get(`${member.guild.id}_${commandName}`);
-  if (!requiredRoleId) return true;
-  return member.roles.cache.has(requiredRoleId);
-}
 
 async function sendLog(guild, logType, title, color, fields) {
   const guildLogs = logChannels.get(guild.id);
@@ -274,36 +265,18 @@ client.on('interactionCreate', async interaction => {
           .setDescription('أهلاً بك يا عمرو! إليك قائمة بجميع الأوامر والأنظمة المتاحة في البوت:')
           .addFields(
             { 
+              name: '⛓️ نظام السجن المتكامل والمحدث', 
+              value: '`/jail-setup` : لوحة إعداد رتبة السجين، رتبة السجان، روم الكتابة الخاصة بالسجناء، وسجل السجن.\n' +
+                     '`/jail` : سجن عضو، سحب كافة رتبه وتوثيق العملية في سجل السجن.\n' +
+                     '`/unjail` : فك سجن العضو وإعادة جميع رتبه السابقة.', 
+              inline: false 
+            },
+            { 
               name: '🛡️ الأوامر الإدارية والحماية', 
-              value: '`/admin-setup` : تحديد الرتب المصرح لها بالأوامر.\n' +
-                     '`/protection` : إعدادات حماية السبام والروابط.\n' +
-                     '`/bad-words` : لوحة الكلمات المحظورة والعقوبات بالأزرار.\n' +
+              value: '`/protection` : إعدادات حماية السبام والروابط.\n' +
+                     '`/bad-words` : لوحة الكلمات المحظورة بالأزرار.\n' +
                      '`/shortcut` : لوحة أزرار اختصارات جميع الأوامر.\n' +
-                     '`/ban` / `/kick` : الحظر والطرد مع السجلات.\n' +
-                     '`/timeout` / `/untimeout` : الكتم ورفع الكتم.\n' +
-                     '`/warn` / `/unwarn` : التحذيرات وإزالتها.\n' +
-                     '`/nick` : تغيير لقب العضو.\n' +
-                     '`/clear` / `/lock` / `/unlock` : إدارة الشات.', 
-              inline: false 
-            },
-            { 
-              name: '⛓️ نظام السجن المتكامل', 
-              value: '`/jail-setup` : إعداد رتبه وغرفة السجن.\n' +
-                     '`/jail` : سحب كافة رتب العضو ونقله للسجن.\n' +
-                     '`/unjail` : إفراج وإعادة الرتب السابقة.', 
-              inline: false 
-            },
-            { 
-              name: '⭐ نظام اللفلات والأذكار', 
-              value: '`/level-setup` & `/level` : نظام التفاعل وبطاقة اللفل.\n' +
-                     '`/azkar-setup` & `/azkar` : نظام الأذكار التلقائية واليدوية.', 
-              inline: false 
-            },
-            { 
-              name: '📝 التذاكر والتقديمات والسجلات', 
-              value: '`/ticket-setup` : إدارة لوحات التذاكر الشاملة.\n' +
-                     '`تقديم` : إدارة لوحات التقديم الأربعة.\n' +
-                     '`/logs` : ضبط قنوات السجلات (باند، طرد، تايم، تحذير، سجن، تكت).', 
+                     '`/ban` / `/kick` / `/timeout` / `/warn`', 
               inline: false 
             }
           )
@@ -313,9 +286,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ embeds: [helpEmbed], ephemeral: true });
       }
 
-      // ==========================================
-      // لوحة الكلمات المحظورة الجديدة (Bad Words Panel)
-      // ==========================================
       if (commandName === 'bad-words') {
         await interaction.deferReply({ ephemeral: true });
         const currentPunish = badWordsPunishment.get(guild.id) || 'delete';
@@ -323,36 +293,33 @@ client.on('interactionCreate', async interaction => {
 
         const embed = new EmbedBuilder()
           .setTitle('🚫 لوحة تحكم الكلمات المحظورة (Bad Words)')
-          .setDescription(`إجمالي الكلمات الممنوعة حالياً: **${wordsSet.size}** كلمة\nالعقوبة الحالية: \`${currentPunish.toUpperCase()}\``)
+          .setDescription(`إجمالي الكلمات: **${wordsSet.size}**\nالعقوبة: \`${currentPunish.toUpperCase()}\``)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('bw_add_word').setLabel('إضافة كلمة ممنوعة').setEmoji('➕').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('bw_list_words').setLabel('عرض جميع الكلمات').setEmoji('📋').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('bw_add_word').setLabel('إضافة كلمة').setEmoji('➕').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('bw_list_words').setLabel('عرض الكلمات').setEmoji('📋').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId('bw_set_punishment').setLabel('تحديد العقوبة').setEmoji('⚖️').setStyle(ButtonStyle.Secondary)
         );
 
         const row2 = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('bw_remove_word').setLabel('إزالة كلمة').setEmoji('➖').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId('bw_clear_all').setLabel('إلغاء وإفريغ الكل').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId('bw_clear_all').setLabel('إفراغ الكل').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
         );
 
         return interaction.editReply({ embeds: [embed], components: [row1, row2] });
       }
 
-      // ==========================================
-      // لوحة الاختصارات الجديدة الشاملة (Shortcuts Panel)
-      // ==========================================
       if (commandName === 'shortcut') {
         await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder()
           .setTitle('⚡ لوحة إدارة اختصارات الأوامر الإدارية')
-          .setDescription('اختر الإجراء أدناه لإنشاء أو عرض أو حذف الاختصارات لجميع الأوامر:')
+          .setDescription('اختر الإجراء أدناه لإدارة الاختصارات:')
           .setColor(0xE74C3C);
 
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('sc_create').setLabel('إنشاء اختصار جديد').setEmoji('🔗').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('sc_list').setLabel('عرض الاختصارات الحالية').setEmoji('📜').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('sc_list').setLabel('عرض الاختصارات').setEmoji('📜').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId('sc_delete').setLabel('حذف اختصار').setEmoji('❌').setStyle(ButtonStyle.Danger)
         );
 
@@ -367,8 +334,8 @@ client.on('interactionCreate', async interaction => {
           .setTitle('🛡️ لوحة نظام الحماية الفعّال')
           .setDescription('تحكم بحماية السيرفر عبر الأزرار أدناه:')
           .addFields(
-            { name: '🚫 حماية الروابط (Anti-Links):', value: currentProt.antiLinks ? '✅ **مفعل**' : '❌ **متوقف**', inline: true },
-            { name: '⚡ حماية السبام (Anti-Spam):', value: currentProt.antiSpam ? '✅ **مفعل**' : '❌ **متوقف**', inline: true }
+            { name: '🚫 حماية الروابط:', value: currentProt.antiLinks ? '✅ **مفعل**' : '❌ **متوقف**', inline: true },
+            { name: '⚡ حماية السبام:', value: currentProt.antiSpam ? '✅ **مفعل**' : '❌ **متوقف**', inline: true }
           )
           .setColor(0xE74C3C);
 
@@ -380,25 +347,51 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply({ embeds: [embed], components: [row] });
       }
 
+      // ==========================================
+      // لوحة إعدادات السجن المحدثة (Jail Setup)
+      // ==========================================
       if (commandName === 'jail-setup') {
         await interaction.deferReply({ ephemeral: true });
+        const jSettings = jailSettings.get(guild.id) || {};
+
+        const roleName = jSettings.roleId ? `<@&${jSettings.roleId}>` : 'غير محدد ❌';
+        const jailerName = jSettings.jailerRoleId ? `<@&${jSettings.jailerRoleId}>` : 'غير محدد (الكل أو المشرفين) ⚠️';
+        const textChanName = jSettings.textChannelId ? `<#${jSettings.textChannelId}>` : 'غير محدد ❌';
+        const logChanName = jSettings.logChannelId ? `<#${jSettings.logChannelId}>` : 'غير محدد ❌';
+
         const embed = new EmbedBuilder()
-          .setTitle('⛓️ إعداد نظام السجن المتكامل')
-          .setDescription('اختر رتبة السجين أو روم السجن عبر القوائم أدناه:')
+          .setTitle('⛓️ لوحة إعداد نظام السجن المتكامل')
+          .setDescription('قم بتخصيص إعدادات السجن عبر القوائم التفاعلية أدناه:')
+          .addFields(
+            { name: '🏷️ رتبة السجين:', value: roleName, inline: true },
+            { name: '🛡️ رتبة السجان (المصرح لها بالسجن):', value: jailerName, inline: true },
+            { name: '💬 روم كتابة السجناء:', value: textChanName, inline: true },
+            { name: '📋 قناة سجل السجن:', value: logChanName, inline: true }
+          )
           .setColor(0xE74C3C);
 
-        const roleMenu = new RoleSelectMenuBuilder().setCustomId('jail_set_role').setPlaceholder('اختر رتبة السجين (Jail Role)...');
-        const channelMenu = new ChannelSelectMenuBuilder().setCustomId('jail_set_channel').setPlaceholder('اختر روم السجن الصوتية...').addChannelTypes(ChannelType.GuildVoice);
+        const row1 = new ActionRowBuilder().addComponents(
+          new RoleSelectMenuBuilder().setCustomId('jail_set_role').setPlaceholder('1️⃣ اختر رتبة السجين...')
+        );
+        const row2 = new ActionRowBuilder().addComponents(
+          new RoleSelectMenuBuilder().setCustomId('jail_set_jailer_role').setPlaceholder('2️⃣ اختر رتبة السجان (المصرح لها)...')
+        );
+        const row3 = new ActionRowBuilder().addComponents(
+          new ChannelSelectMenuBuilder().setCustomId('jail_set_text_channel').setPlaceholder('3️⃣ اختر روم الكتابة المخصصة للسجناء...').addChannelTypes(ChannelType.GuildText)
+        );
+        const row4 = new ActionRowBuilder().addComponents(
+          new ChannelSelectMenuBuilder().setCustomId('jail_set_log_channel').setPlaceholder('4️⃣ اختر قناة سجل السجن (Log)...').addChannelTypes(ChannelType.GuildText)
+        );
 
         return interaction.editReply({
           embeds: [embed],
-          components: [
-            new ActionRowBuilder().addComponents(roleMenu),
-            new ActionRowBuilder().addComponents(channelMenu)
-          ]
+          components: [row1, row2, row3, row4]
         });
       }
 
+      // ==========================================
+      // تنفيذ أمر السجن مع التحقق وسحب الرتب وتوثيق السجل
+      // ==========================================
       if (commandName === 'jail') {
         const user = options.getUser('العضو');
         const reason = options.getString('السبب');
@@ -408,41 +401,94 @@ client.on('interactionCreate', async interaction => {
         if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود في السيرفر.', ephemeral: true });
         if (!jSettings || !jSettings.roleId) return interaction.reply({ content: '❌ لم يتم إعداد رتبة السجن بعد! استخدم `/jail-setup` أولاً.', ephemeral: true });
 
-        const memberRoles = targetMember.roles.cache.filter(r => r.id !== guild.id).map(r => r.id);
+        // التحقق من صلاحية رتبة السجان إذا تم تحديدها
+        if (jSettings.jailerRoleId && !member.permissions.has(PermissionFlagsBits.Administrator)) {
+          if (!member.roles.cache.has(jSettings.jailerRoleId)) {
+            return interaction.reply({ content: '❌ عذراً، أنت لا تمتلك رتبة السجان المصرح لها باستخدام هذا الأمر.', ephemeral: true });
+          }
+        }
+
+        // جلب جميع رتب العضو عدا رتبة Everyone واستثناء رتبة السجن إن وجدت
+        const memberRoles = targetMember.roles.cache
+          .filter(r => r.id !== guild.id && r.id !== jSettings.roleId)
+          .map(r => r.id);
+
+        const removedRoleMentions = memberRoles.map(rId => `<@&${rId}>`).join(', ') || 'لا توجد رتب أُزيلت';
+
+        // حفظ الرتب المسحوبة
         jailedUsers.set(`${guild.id}_${user.id}`, memberRoles);
 
+        // سحب الرتب وإضافة رتبة السجن
         await targetMember.roles.remove(memberRoles).catch(() => {});
         await targetMember.roles.add(jSettings.roleId).catch(() => {});
 
-        if (jSettings.voiceChannelId) {
-          await targetMember.voice.setChannel(jSettings.voiceChannelId).catch(() => {});
+        // توجيه العضو أو إرسال رسالة في روم كتابة السجناء إن وجدت
+        if (jSettings.textChannelId) {
+          const jailTextChan = guild.channels.cache.get(jSettings.textChannelId);
+          if (jailTextChan) {
+            jailTextChan.send(`🚨 مرحباً ${targetMember}، لقد تم زجك في السجن. السبب: **${reason}**`).catch(() => {});
+          }
         }
 
-        await sendLog(guild, 'jail', '⛓️ سجل سجن عضو جديد', 0xE74C3C, [
-          { name: '👤 العضو المسجون:', value: `${user.tag}` },
-          { name: '🛡️ الإداري:', value: `${interaction.user.tag}` },
-          { name: '📝 السبب:', value: reason }
-        ]);
+        // إرسال السجل التفصيلي في قناة سجل السجن المحددة
+        if (jSettings.logChannelId) {
+          const logChan = guild.channels.cache.get(jSettings.logChannelId);
+          if (logChan) {
+            const jailLogEmbed = new EmbedBuilder()
+              .setTitle('⛓️ سجل سجن عضو جديد')
+              .setColor(0xE74C3C)
+              .addFields(
+                { name: '👤 العضو المسجون:', value: `${user.tag} (${user.id})`, inline: false },
+                { name: '🛡️ الشخص الساجن (الإداري):', value: `${interaction.user.tag}`, inline: false },
+                { name: '🏷️ الرتب التي تمت إزالتها:', value: removedRoleMentions, inline: false },
+                { name: '📝 السبب:', value: reason, inline: false }
+              )
+              .setTimestamp();
+            logChan.send({ embeds: [jailLogEmbed] }).catch(() => {});
+          }
+        }
 
-        return interaction.reply({ content: `✅ تم سجن العضو **${user.tag}** بنجاح.`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم سجن العضو **${user.tag}** بنجاح وتوثيق العملية في سجل السجن.`, ephemeral: true });
       }
 
+      // ==========================================
+      // تنفيذ أمر فك السجن وإعادة الرتب
+      // ==========================================
       if (commandName === 'unjail') {
         const user = options.getUser('العضو');
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
         const jSettings = jailSettings.get(guild.id);
         const savedRoles = jailedUsers.get(`${guild.id}_${user.id}`);
 
-        if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
+        if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود في السيرفر.', ephemeral: true });
         if (!jSettings || !jSettings.roleId) return interaction.reply({ content: '❌ نظام السجن غير معدل.', ephemeral: true });
 
+        // إزالة رتبة السجن
         await targetMember.roles.remove(jSettings.roleId).catch(() => {});
+
+        // إعادة الرتب السابقة إن وجدت
         if (savedRoles && savedRoles.length > 0) {
           await targetMember.roles.add(savedRoles).catch(() => {});
           jailedUsers.delete(`${guild.id}_${user.id}`);
         }
 
-        return interaction.reply({ content: `✅ تم فك سجن العضو **${user.tag}** وإعادة رتبه بنجاح.`, ephemeral: true });
+        // توثيق الإفراج في سجل السجن إن وجد
+        if (jSettings.logChannelId) {
+          const logChan = guild.channels.cache.get(jSettings.logChannelId);
+          if (logChan) {
+            const unjailEmbed = new EmbedBuilder()
+              .setTitle('🔓 سجل الإفراج عن مسجون')
+              .setColor(0x2ECC71)
+              .addFields(
+                { name: '👤 العضو المُفرج عنه:', value: `${user.tag}`, inline: true },
+                { name: '🛡️ بواسطة الإداري:', value: `${interaction.user.tag}`, inline: true }
+              )
+              .setTimestamp();
+            logChan.send({ embeds: [unjailEmbed] }).catch(() => {});
+          }
+        }
+
+        return interaction.reply({ content: `✅ تم فك سجن العضو **${user.tag}** وإعادة رتبه السابقة بنجاح.`, ephemeral: true });
       }
 
       if (commandName === 'nick') {
@@ -747,13 +793,24 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
+    // ==========================================
+    // معالجة قوائم اختيار الرتب والقنوات لإعدادات السجن
+    // ==========================================
     if (interaction.isRoleSelectMenu()) {
       if (interaction.customId === 'jail_set_role') {
         const roleId = interaction.values[0];
         let current = jailSettings.get(interaction.guild.id) || {};
         current.roleId = roleId;
         jailSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ تم تحديد رتبة السجن بنجاح: <@&${roleId}>`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تحديد رتبة السجين بنجاح: <@&${roleId}>`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'jail_set_jailer_role') {
+        const roleId = interaction.values[0];
+        let current = jailSettings.get(interaction.guild.id) || {};
+        current.jailerRoleId = roleId;
+        jailSettings.set(interaction.guild.id, current);
+        return interaction.reply({ content: `✅ تم تحديد رتبة السجان (المصرح لها بالسجن) بنجاح: <@&${roleId}>`, ephemeral: true });
       }
     }
 
@@ -767,12 +824,20 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `✅ تم تحديد قناة (${logType.toUpperCase()}) بنجاح!`, ephemeral: true });
       }
 
-      if (id === 'jail_set_channel') {
+      if (id === 'jail_set_text_channel') {
         const channelId = interaction.values[0];
         let current = jailSettings.get(interaction.guild.id) || {};
-        current.voiceChannelId = channelId;
+        current.textChannelId = channelId;
         jailSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ تم تحديد روم السجن الصوتي بنجاح.`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تحديد روم كتابة السجناء بنجاح: <#${channelId}>`, ephemeral: true });
+      }
+
+      if (id === 'jail_set_log_channel') {
+        const channelId = interaction.values[0];
+        let current = jailSettings.get(interaction.guild.id) || {};
+        current.logChannelId = channelId;
+        jailSettings.set(interaction.guild.id, current);
+        return interaction.reply({ content: `✅ تم تحديد قناة سجل السجن (Log) بنجاح: <#${channelId}>`, ephemeral: true });
       }
     }
 
@@ -799,7 +864,6 @@ client.on('interactionCreate', async interaction => {
     if (interaction.isButton()) {
       const id = interaction.customId;
 
-      // أزرار لوحة الكلمات المحظورة
       if (id === 'bw_add_word') {
         const modal = new ModalBuilder().setCustomId('bw_modal_add').setTitle('إضافة كلمة ممنوعة جديدة');
         modal.addComponents(
@@ -821,10 +885,10 @@ client.on('interactionCreate', async interaction => {
       if (id === 'bw_set_punishment') {
         const embed = new EmbedBuilder().setTitle('⚖️ تحديد العقوبة التلقائية للكلمات الممنوعة').setDescription('اختر العقوبة المناسبة من الأزرار أدناه:').setColor(0xE74C3C);
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('bw_pun_delete').setLabel('حذف الرسالة فقط').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('bw_pun_timeout').setLabel('كتم العضو (Timeout)').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('bw_pun_kick').setLabel('طرد العضو (Kick)').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId('bw_pun_ban').setLabel('حظر العضو (Ban)').setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId('bw_pun_delete').setLabel('حذف الرسالة').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('bw_pun_timeout').setLabel('كتم العضو').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('bw_pun_kick').setLabel('طرد العضو').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('bw_pun_ban').setLabel('حظر العضو').setStyle(ButtonStyle.Danger)
         );
         return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
       }
@@ -848,14 +912,13 @@ client.on('interactionCreate', async interaction => {
       if (id === 'bw_clear_all') {
         badWordsDB.set(interaction.guild.id, new Set());
         badWordsPunishment.set(interaction.guild.id, 'delete');
-        return interaction.reply({ content: '🗑️ تم إفراغ وإلغاء جميع الكلمات المحظورة وإعادة ضبط العقوبات.', ephemeral: true });
+        return interaction.reply({ content: '🗑️ تم إفراغ وإلغاء جميع الكلمات المحظورة.', ephemeral: true });
       }
 
-      // أزرار لوحة الاختصارات الشاملة لجميع الأوامر
       if (id === 'sc_create') {
         const embed = new EmbedBuilder()
           .setTitle('🔗 اختيار الأمر لعمل اختصار له')
-          .setDescription('اختر الأمر الإداري من القائمة أدناه لتعيين اختصار خاص به:')
+          .setDescription('اختر الأمر الإداري من القائمة أدناه:')
           .setColor(0xE74C3C);
 
         const selectMenu = new StringSelectMenuBuilder()
@@ -867,13 +930,9 @@ client.on('interactionCreate', async interaction => {
             { label: 'كتم مؤقت (timeout)', value: 'timeout', emoji: '⏰' },
             { label: 'رفع الكتم (untimeout)', value: 'untimeout', emoji: '🔊' },
             { label: 'تحذير (warn)', value: 'warn', emoji: '⚠️' },
-            { label: 'مسح التحذيرات (unwarn)', value: 'unwarn', emoji: '🛡️' },
-            { label: 'تغيير اللقب (nick)', value: 'nick', emoji: '✏️' },
             { label: 'سجن (jail)', value: 'jail', emoji: '⛓️' },
             { label: 'إفراج السجن (unjail)', value: 'unjail', emoji: '🔓' },
-            { label: 'مسح رسائل (clear)', value: 'clear', emoji: '🧹' },
-            { label: 'قفل القناة (lock)', value: 'lock', emoji: '🔒' },
-            { label: 'فتح القناة (unlock)', value: 'unlock', emoji: '🔓' }
+            { label: 'مسح رسائل (clear)', value: 'clear', emoji: '🧹' }
           );
 
         return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
@@ -881,7 +940,7 @@ client.on('interactionCreate', async interaction => {
 
       if (id === 'sc_list') {
         const guildShortcuts = Array.from(customShortcuts.entries()).filter(([k]) => k.startsWith(interaction.guild.id));
-        if (guildShortcuts.length === 0) return interaction.reply({ content: '❌ لا توجد أي اختصارات مسجلة في هذا السيرفر.', ephemeral: true });
+        if (guildShortcuts.length === 0) return interaction.reply({ content: '❌ لا توجد أي اختصارات مسجلة.', ephemeral: true });
 
         const listText = guildShortcuts.map(([key, orig]) => {
           const alias = key.replace(`${interaction.guild.id}_`, '');
@@ -906,14 +965,14 @@ client.on('interactionCreate', async interaction => {
         let current = protectionSettings.get(interaction.guild.id) || { antiSpam: false, antiLinks: false };
         current.antiLinks = !current.antiLinks;
         protectionSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `🛡️ تم **${current.antiLinks ? 'تفعيل' : 'إيقاف'}** حماية الروابط بنجاح.`, ephemeral: true });
+        return interaction.reply({ content: `🛡️ تم **${current.antiLinks ? 'تفعيل' : 'إيقاف'}** حماية الروابط.`, ephemeral: true });
       }
 
       if (id === 'prot_toggle_spam') {
         let current = protectionSettings.get(interaction.guild.id) || { antiSpam: false, antiLinks: false };
         current.antiSpam = !current.antiSpam;
         protectionSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `⚡ تم **${current.antiSpam ? 'تفعيل' : 'إيقاف'}** حماية السبام بنجاح.`, ephemeral: true });
+        return interaction.reply({ content: `⚡ تم **${current.antiSpam ? 'تفعيل' : 'إيقاف'}** حماية السبام.`, ephemeral: true });
       }
 
       if (id === 'tk_edit_panel') {
@@ -1000,7 +1059,7 @@ client.on('interactionCreate', async interaction => {
         let wordsSet = badWordsDB.get(interaction.guild.id) || new Set();
         wordsSet.add(newWord);
         badWordsDB.set(interaction.guild.id, wordsSet);
-        return interaction.reply({ content: `✅ تم إضافة الكلمة \`${newWord}\` إلى قائمة الكلمات الممنوعة بنجاح!`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم إضافة الكلمة \`${newWord}\` للقائمة بنجاح!`, ephemeral: true });
       }
 
       if (interaction.customId === 'bw_modal_remove') {
@@ -1009,16 +1068,16 @@ client.on('interactionCreate', async interaction => {
         if (wordsSet.has(wordToRemove)) {
           wordsSet.delete(wordToRemove);
           badWordsDB.set(interaction.guild.id, wordsSet);
-          return interaction.reply({ content: `✅ تم إزالة الكلمة \`${wordToRemove}\` من القائمة بنجاح.`, ephemeral: true });
+          return interaction.reply({ content: `✅ تم إزالة الكلمة \`${wordToRemove}\`.`, ephemeral: true });
         }
-        return interaction.reply({ content: `❌ الكلمة \`${wordToRemove}\` غير موجودة في القائمة أصلاً.`, ephemeral: true });
+        return interaction.reply({ content: `❌ الكلمة غير موجودة.`, ephemeral: true });
       }
 
       if (interaction.customId.startsWith('sc_modal_save_')) {
         const origCmd = interaction.customId.replace('sc_modal_save_', '');
         const alias = interaction.fields.getTextInputValue('shortcut_alias_input').toLowerCase().trim().replace('!', '');
         customShortcuts.set(`${interaction.guild.id}_${alias}`, origCmd);
-        return interaction.reply({ content: `⚡ تم إنشاء الاختصار بنجاح! أصبح بإمكانك استخدام \`!${alias}\` لتنفيذ الأمر \`/${origCmd}\`.`, ephemeral: true });
+        return interaction.reply({ content: `⚡ تم إنشاء الاختصار بنجاح! \`!${alias}\` تنفذ الأمر \`/${origCmd}\`.`, ephemeral: true });
       }
 
       if (interaction.customId === 'sc_modal_delete_alias') {
@@ -1026,9 +1085,9 @@ client.on('interactionCreate', async interaction => {
         const key = `${interaction.guild.id}_${alias}`;
         if (customShortcuts.has(key)) {
           customShortcuts.delete(key);
-          return interaction.reply({ content: `✅ تم حذف الاختصار \`!${alias}\` بنجاح.`, ephemeral: true });
+          return interaction.reply({ content: `✅ تم حذف الاختصار \`!${alias}\`.`, ephemeral: true });
         }
-        return interaction.reply({ content: `❌ الاختصار \`!${alias}\` غير موجود.`, ephemeral: true });
+        return interaction.reply({ content: `❌ الاختصار غير موجود.`, ephemeral: true });
       }
 
       if (interaction.customId === 'save_ticket_panel') {
@@ -1070,11 +1129,9 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// نظام الفحص التلقائي للرسائل (الكلمات المحظورة، الروابط، نظام الـ XP)
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
-  // فحص الكلمات المحظورة وتنفيذ العقوبة
   const wordsSet = badWordsDB.get(message.guild.id);
   if (wordsSet && wordsSet.size > 0 && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
     const contentLower = message.content.toLowerCase();
@@ -1098,64 +1155,23 @@ client.on('messageCreate', async message => {
         await message.member.ban({ reason: 'استخدام كلمات محظورة' }).catch(() => {});
       }
 
-      const warnMsg = await message.channel.send(`⚠️ ${message.author}، تم حذف رسالتك لاحتوائها على كلمات ممنوعة! (العقوبة: ${punishment.toUpperCase()})`);
+      const warnMsg = await message.channel.send(`⚠️ ${message.author}، تم حذف رسالتك لاحتوائها على كلمات ممنوعة!`);
       setTimeout(() => warnMsg.delete().catch(() => {}), 4000);
       return;
     }
   }
 
-  // فحص حماية الروابط
   const prot = protectionSettings.get(message.guild.id);
   if (prot && prot.antiLinks) {
     if (message.content.includes('http://') || message.content.includes('https://') || message.content.includes('discord.gg/')) {
       if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
         await message.delete().catch(() => {});
-        const warnMsg = await message.channel.send(`⚠️ ${message.author}، ممنوع إرسال الروابط في هذا السيرفر!`);
+        const warnMsg = await message.channel.send(`⚠️ ${message.author}، ممنوع إرسال الروابط!`);
         setTimeout(() => warnMsg.delete().catch(() => {}), 4000);
         return;
       }
     }
   }
-
-  // فحص نظام الاختصارات المكتوبة بالشات (مثلاً !b أو !k)
-  if (message.content.startsWith('!')) {
-    const args = message.content.slice(1).trim().split(/ +/);
-    const alias = args.shift().toLowerCase();
-    const origCmd = customShortcuts.get(`${message.guild.id}_${alias}`);
-
-    if (origCmd) {
-      if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-      
-      if (origCmd === 'clear') {
-        const count = parseInt(args[0]) || 10;
-        await message.channel.bulkDelete(count, true).catch(() => {});
-        return message.channel.send(`🧹 تم مسح **${count}** رسالة عبر الاختصار.`).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
-      }
-      if (origCmd === 'lock') {
-        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
-        return message.channel.send('🔒 **تم قفل الروم عبر الاختصار.**');
-      }
-      if (origCmd === 'unlock') {
-        await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
-        return message.channel.send('🔓 **تم فتح الروم عبر الاختصار.**');
-      }
-    }
-  }
-
-  // نظام احتساب الـ XP والتفاعل (Levels System)
-  const key = `${message.guild.id}_${message.author.id}`;
-  let userData = userLevels.get(key) || { xp: 0, level: 0 };
-  userData.xp += Math.floor(Math.random() * 10) + 15;
-
-  const settings = levelSettings.get(message.guild.id) || { baseMultiplier: 200 };
-  const requiredXp = (userData.level + 1) * settings.baseMultiplier;
-
-  if (userData.xp >= requiredXp) {
-    userData.level += 1;
-    userData.xp -= requiredXp;
-    message.channel.send(`🎉 مبروك ${message.author}، لقد صعدت إلى المستوى **Level ${userData.level}**!`).catch(() => {});
-  }
-  userLevels.set(key, userData);
 });
 
 async function handleTicketCloseLog(channel, guild, closedBy) {
@@ -1175,30 +1191,6 @@ async function handleTicketCloseLog(channel, guild, closedBy) {
 
   await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
 }
-
-setInterval(() => {
-  const now = Date.now();
-  azkarSettings.forEach(async (data, guildId) => {
-    const elapsedHours = (now - data.lastSent) / (1000 * 60 * 60);
-    if (elapsedHours >= data.intervalHours) {
-      const guild = client.guilds.cache.get(guildId);
-      if (!guild) return;
-      const channel = guild.channels.cache.get(data.channelId);
-      if (!channel) return;
-
-      const randomZikr = azkarList[Math.floor(Math.random() * azkarList.length)];
-      const zikrEmbed = new EmbedBuilder()
-        .setTitle('📿 تذكير: أذكار المسلم')
-        .setDescription(`> **${randomZikr}**`)
-        .setColor(0xE74C3C)
-        .setTimestamp();
-
-      await channel.send({ embeds: [zikrEmbed] }).catch(() => {});
-      data.lastSent = now;
-      azkarSettings.set(guildId, data);
-    }
-  });
-}, 60000);
 
 const TOKEN = process.env.TOKEN;
 const rest = new REST({ version: '10' }).setToken(TOKEN);
