@@ -4,12 +4,10 @@
 const express = require('express');
 const app = express();
 
-// مسار رئيسي يعيد استجابة واضحة
 app.get('/', (req, res) => {
   res.status(200).send('Boxtar Bot is active! 🚀');
 });
 
-// إضافة مسار إضافي للاستجابة السريعة (Ping) لتجنب أي مشاكل في التوجيه
 app.get('/ping', (req, res) => {
   res.status(200).send('PONG');
 });
@@ -42,16 +40,15 @@ const {
   PermissionFlagsBits
 } = require('discord.js');
 
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates
   ]
-});
-
-client.once('clientReady', () => {
-  console.log(`✅ تم تنشيط البوت بنجاح باسم: ${client.user.tag}`);
 });
 
 const afkUsers = new Map();
@@ -61,6 +58,11 @@ const ticketSettings = new Map();
 const applicationsData = new Map();
 const customShortcuts = new Map();    
 const commandRoles = new Map();        
+
+// متغيرات نظام اللفلات الجديدة
+const levelSettings = new Map();   
+const userLevels = new Map();      
+const levelRoles = new Map();      
 
 const commands = [
   new SlashCommandBuilder()
@@ -94,6 +96,17 @@ const commands = [
     .setName('logs')
     .setDescription('إعداد وتحديد قنوات السجلات الخاصة والإجراءات والتذاكر')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  // أوامر اللفلات الجديدة
+  new SlashCommandBuilder()
+    .setName('level-setup')
+    .setDescription('إعداد وتخصيص نظام اللفلات، معادلة الـ XP، ورتب المكافآت')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('level')
+    .setDescription('عرض بطاقة اللفل المصورة وإحصائيات الـ XP')
+    .addUserOption(opt => opt.setName('العضو').setDescription('اختر العضو لعرض لفله').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('afk')
@@ -206,6 +219,12 @@ client.on('interactionCreate', async interaction => {
               inline: false 
             },
             { 
+              name: '⭐ نظام اللفلات والرتب', 
+              value: '`/level-setup` : إعداد وتخصيص نظام اللفلات ومعادلة الـ XP ورتب المكافآت.\n' +
+                     '`/level` : عرض بطاقة اللفل المصورة وإحصائيات الـ XP (كتابة وصوت).', 
+              inline: false 
+            },
+            { 
               name: '⚙️ أوامر النظام والأعضاء', 
               value: '`/afk` : تفعيل وضع الغياب AFK.\n' +
                      '`/avatar` : عرض صورة الحساب الشخصية.\n' +
@@ -264,6 +283,81 @@ client.on('interactionCreate', async interaction => {
           .setColor(0x2ECC71);
 
         return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // أوامر إعداد اللفلات والـ Level Card
+      if (commandName === 'level-setup') {
+        await interaction.deferReply({ ephemeral: true });
+        const embed = new EmbedBuilder()
+          .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels)')
+          .setDescription('اختر الإجراء المناسب لضبط نظام التفاعل واللفلات في السيرفر:')
+          .setColor(0xF1C40F);
+
+        const row1 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('lvl_set_formula').setLabel('تحديد الـ XP الأساسي (للصعود)').setEmoji('📈').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('lvl_set_reward').setLabel('ربط لفل برتبة (Reward)').setEmoji('🎁').setStyle(ButtonStyle.Success)
+        );
+        const row2 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('lvl_view_settings').setLabel('عرض الإعدادات الحالية').setEmoji('📋').setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.editReply({ embeds: [embed], components: [row1, row2] });
+      }
+
+      if (commandName === 'level') {
+        await interaction.deferReply();
+        const targetUser = options.getUser('العضو') || interaction.user;
+        const key = `${guild.id}_${targetUser.id}`;
+        const userData = userLevels.get(key) || { xp: 0, level: 0, chatXp: 0, voiceXp: 0 };
+        
+        const settings = levelSettings.get(guild.id) || { baseMultiplier: 200 };
+        const nextLevelXp = (userData.level + 1) * settings.baseMultiplier;
+
+        try {
+          const canvas = createCanvas(700, 250);
+          const ctx = canvas.getContext('2d');
+
+          ctx.fillStyle = '#1e1f22';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          ctx.fillStyle = '#2b2d31';
+          ctx.beginPath();
+          ctx.roundRect(220, 160, 440, 25, 12.5);
+          ctx.fill();
+
+          const percentage = Math.min(userData.xp / nextLevelXp, 1);
+          const progressWidth = Math.max(percentage * 440, 25);
+          ctx.fillStyle = '#5865F2';
+          ctx.beginPath();
+          ctx.roundRect(220, 160, progressWidth, 25, 12.5);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 28px sans-serif';
+          ctx.fillText(targetUser.username, 220, 60);
+
+          ctx.fillStyle = '#b5bac1';
+          ctx.font = '18px sans-serif';
+          ctx.fillText(`اللفل: ${userData.level}  |  الـ XP: ${userData.xp} /${nextLevelXp}`, 220, 100);
+          ctx.fillText(`💬 كتابة: ${userData.chatXp} XP  \vert{}  🔊 صوت: ${userData.voiceXp} XP`, 220, 130);
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(110, 125, 75, 0, Math.PI * 2, true);
+          ctx.closePath();
+          ctx.clip();
+
+          const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 256 });
+          const avatar = await loadImage(avatarURL);
+          ctx.drawImage(avatar, 35, 50, 150, 150);
+          ctx.restore();
+
+          const attachment = { attachment: canvas.toBuffer('image/png'), name: 'rank-card.png' };
+          return interaction.editReply({ files: [attachment] });
+        } catch (err) {
+          console.error(err);
+          return interaction.editReply({ content: `❌ حدث خطأ أثناء إنشاء بطاقة اللفل.` });
+        }
       }
 
       const adminCmds = ['ban', 'kick', 'timeout', 'warn', 'clear', 'lock', 'unlock'];
@@ -720,6 +814,39 @@ client.on('interactionCreate', async interaction => {
         await interaction.channel.delete().catch(() => {});
       }
 
+      // تفاعلات أزرار إعدادات اللفلات
+      if (id === 'lvl_set_formula') {
+        const modal = new ModalBuilder().setCustomId('save_lvl_formula').setTitle('تحديد الـ XP الأساسي للفل');
+        const baseInput = new TextInputBuilder().setCustomId('base_xp').setLabel('الـ XP الأساسي (مثلاً 200)').setStyle(TextInputStyle.Short).setRequired(true);
+        modal.addComponents(new ActionRowBuilder().addComponents(baseInput));
+        return await interaction.showModal(modal);
+      }
+
+      if (id === 'lvl_set_reward') {
+        const modal = new ModalBuilder().setCustomId('save_lvl_reward').setTitle('ربط لفل برتبة تلقائية');
+        const levelInput = new TextInputBuilder().setCustomId('target_level').setLabel('رقم اللفل المطلوب (مثلاً 5)').setStyle(TextInputStyle.Short).setRequired(true);
+        const roleIdInput = new TextInputBuilder().setCustomId('target_role_id').setLabel('اي دي الرتبة (Role ID)').setStyle(TextInputStyle.Short).setRequired(true);
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(levelInput),
+          new ActionRowBuilder().addComponents(roleIdInput)
+        );
+        return await interaction.showModal(modal);
+      }
+
+      if (id === 'lvl_view_settings') {
+        const settings = levelSettings.get(interaction.guild.id) || { baseMultiplier: 200 };
+        return interaction.reply({ content: `📋 **إعدادات السيرفر الحالية:**\n- مضاعف الـ XP الأساسي: **${settings.baseMultiplier} XP** لكل لفل.`, ephemeral: true });
+      }
+
+      if (id === 'ticket_support_btn') {
+        const data = ticketData.get(interaction.guild.id) || {};
+        const supportRoleId = data.supportRoleId;
+        return interaction.reply({
+          content: `📢 **تم إرسال نداء عاجل لطاقم الدعم الفني:** ${supportRoleId ? `<@&${supportRoleId}>` : 'الإداريين'}`,
+          ephemeral: true
+        });
+      }
+
       if (id.startsWith('app_cfg_')) {
         const appNum = id.replace('app_cfg_', '');
         const embed = new EmbedBuilder().setTitle(`⚙️ إعدادات التقديم رقم (${appNum})`).setDescription(`اضغط على **تعديل الإعدادات والأسئلة** لتحديد الاسم والأسئلة:`).setColor(0x9B59B6);
@@ -817,6 +944,20 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ **تم حفظ رسالة الترحيب بنجاح!**', ephemeral: true });
       }
 
+      // حفظ إعدادات اللفلات
+      if (interaction.customId === 'save_lvl_formula') {
+        const baseXp = parseInt(interaction.fields.getTextInputValue('base_xp')) || 200;
+        levelSettings.set(interaction.guild.id, { baseMultiplier: baseXp });
+        return interaction.reply({ content: `✅ **تم تحديث قاعدة احتساب الـ XP بنجاح لتصبح:** \`${baseXp} XP\` كمضاعف لكل لفل.`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'save_lvl_reward') {
+        const targetLevel = interaction.fields.getTextInputValue('target_level');
+        const roleId = interaction.fields.getTextInputValue('target_role_id');
+        levelRoles.set(`${interaction.guild.id}_${targetLevel}`, roleId);
+        return interaction.reply({ content: `✅ **تم ربط اللفل (${targetLevel}) بالرتبة بنجاح!**`, ephemeral: true });
+      }
+
       if (interaction.customId === 'ticket_reason_modal') {
         const reason = interaction.fields.getTextInputValue('ticket_reason_input');
         const user = interaction.user;
@@ -848,7 +989,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         const ticketChannel = await guild.channels.create(channelOptions);
-
         const welcomeText = settings.welcomeMsg || 'يرجى انتظار مسؤولي التذكرة الرد عليك';
         
         const ticketEmbed = new EmbedBuilder()
@@ -965,6 +1105,7 @@ async function handleTicketCloseLog(channel, guild, closedBy) {
   }
 }
 
+// نظام كسب الـ XP من الكتابة في الشات
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
@@ -992,6 +1133,21 @@ client.on('messageCreate', async message => {
         await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
         return message.reply(`🔓 **تم فتح القناة عبر الاختصار (!${cmdName})**`);
       }
+      if (originalCmd === 'ban') {
+        const user = message.mentions.users.first();
+        const reason = args.slice(1).join(' ') || 'بدون سبب';
+        if (!user) return message.reply('❌ **يرجى منشن العضو المراد حظره!**');
+        await message.guild.members.ban(user.id, { reason }).catch(() => {});
+        return message.reply(`✅ **تم حظر العضو ${user.tag} عبر الاختصار.**`);
+      }
+      if (originalCmd === 'kick') {
+        const user = message.mentions.users.first();
+        const reason = args.slice(1).join(' ') || 'بدون سبب';
+        if (!user) return message.reply('❌ **يرجى منشن العضو المراد طرده!**');
+        const targetMember = await message.guild.members.fetch(user.id).catch(() => null);
+        if (targetMember) await targetMember.kick(reason).catch(() => {});
+        return message.reply(`✅ **تم طرد العضو ${user.tag} عبر الاختصار.**`);
+      }
     }
   }
 
@@ -1014,22 +1170,92 @@ client.on('messageCreate', async message => {
       }
     });
   }
+
+  // إضافة XP الكتابة
+  const key = `${message.guild.id}_${message.author.id}`;
+  let userData = userLevels.get(key) || { xp: 0, level: 0, chatXp: 0, voiceXp: 0 };
+
+  const earnedXp = Math.floor(Math.random() * 11) + 15;
+  userData.xp += earnedXp;
+  userData.chatXp += earnedXp;
+
+  const settings = levelSettings.get(message.guild.id) || { baseMultiplier: 200 };
+  const requiredXp = (userData.level + 1) * settings.baseMultiplier;
+
+  if (userData.xp >= requiredXp) {
+    userData.level += 1;
+    userData.xp -= requiredXp;
+
+    const levelUpEmbed = new EmbedBuilder()
+      .setTitle('🎉 مبروك الترقي!')
+      .setDescription(`تهانينا ${message.author}! لقد صعدت إلى **اللفل ${userData.level}** 🚀`)
+      .setColor(0x2ECC71);
+    
+    message.channel.send({ embeds: [levelUpEmbed] }).catch(() => {});
+
+    const rewardRoleId = levelRoles.get(`${message.guild.id}_${userData.level}`);
+    if (rewardRoleId) {
+      const member = message.guild.members.cache.get(message.author.id);
+      if (member) {
+        member.roles.add(rewardRoleId).catch(() => {});
+      }
+    }
+  }
+
+  userLevels.set(key, userData);
 });
+
+// نظام كسب الـ XP من الرومات الصوتية (كل دقيقة)
+setInterval(() => {
+  client.guilds.cache.forEach(guild => {
+    guild.channels.cache.forEach(channel => {
+      if (channel.type === ChannelType.GuildVoice) {
+        channel.members.forEach(member => {
+          if (member.user.bot) return;
+
+          const key = `${guild.id}_${member.id}`;
+          let userData = userLevels.get(key) || { xp: 0, level: 0, chatXp: 0, voiceXp: 0 };
+
+          const voiceXpGain = 10;
+          userData.xp += voiceXpGain;
+          userData.voiceXp += voiceXpGain;
+
+          const settings = levelSettings.get(guild.id) || { baseMultiplier: 200 };
+          const requiredXp = (userData.level + 1) * settings.baseMultiplier;
+
+          if (userData.xp >= requiredXp) {
+            userData.level += 1;
+            userData.xp -= requiredXp;
+            
+            const rewardRoleId = levelRoles.get(`${guild.id}_${userData.level}`);
+            if (rewardRoleId) {
+              member.roles.add(rewardRoleId).catch(() => {});
+            }
+          }
+
+          userLevels.set(key, userData);
+        });
+      }
+    });
+  });
+}, 60000);
 
 const TOKEN = process.env.TOKEN;
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
-(async () => {
+// تسجيل الأوامر بصورة صحيحة بعد جاهزية البوت
+client.once('ready', async () => {
+  console.log(`✅ تم تنشيط البوت بنجاح باسم: ${client.user.tag}`);
   try {
     console.log('🔄 جاري تسجيل وتثبيت كافة الأوامر والميزات...');
     await rest.put(
-      Routes.applicationCommands(client.user?.id || process.env.CLIENT_ID || '1550180675871703080'), 
+      Routes.applicationCommands(client.user.id), 
       { body: commands }
     );
     console.log('✅ تم تسجيل النظام بنجاح!');
   } catch (err) {
     console.error('❌ خطأ أثناء تسجيل الأوامر:', err);
   }
-})();
+});
 
 client.login(TOKEN);
