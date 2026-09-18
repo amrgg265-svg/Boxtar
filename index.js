@@ -18,7 +18,7 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 // ==========================================
-// 2. كود بوت ديسكورد والميزات الكاملة
+// 2. كود بوت ديسكورد والميزات الكاملة + الأذكار
 // ==========================================
 const { 
   Client, 
@@ -62,6 +62,21 @@ const commandRoles = new Map();
 const levelSettings = new Map();   
 const userLevels = new Map();      
 const levelRoles = new Map();      
+
+// خريطة لتخزين إعدادات الأذكار لكل سيرفر (القناة والوقت)
+const azkarSettings = new Map();
+
+// قائمة الأذكار المتنوعة
+const azkarList = [
+  "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ العَظِيمِ.",
+  "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ العَلِيِّ العَظِيمِ.",
+  "أَسْتَغْفِرُ اللَّهَ العَظِيمَ وَأَتُوبُ إِلَيْهِ.",
+  "لَا إِلَهَ إِلَّا اللَّه وحدَهُ لا شريكَ لهُ، لهُ الملكُ ولهُ الحمدُ وهوَ على كلِّ شيءٍ قديرٌ.",
+  "اللَّهُمَّ صَلِّ وَسَلِّمْ وَبَارِكْ عَلَى نَبِيِّنَا مُحَمَّدٍ.",
+  "سُبْحَانَ اللَّهِ، وَالْحَمْدُ لِلَّهِ، وَلَا إِلَهَ إِلَّا اللَّهُ، وَاللَّهُ أَكْبَرُ.",
+  "اللَّهُمَّ أَنْتَ رَبِّي لا إِلَهَ إِلا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ.",
+  "رَبِّ اغْفِرْ لِي وَتُبْ عَلَيَّ إِنَّكَ أَنْتَ التَّوَّابُ الرَّحِيمُ."
+];
 
 const commands = [
   new SlashCommandBuilder()
@@ -110,21 +125,48 @@ const commands = [
     .setName('afk')
     .setDescription('تفعيل وضع الغياب AFK')
     .addStringOption(opt => opt.setName('سبب').setDescription('سبب الغياب (اختياري)').setRequired(false)),
+
   new SlashCommandBuilder()
     .setName('bad-words')
     .setDescription('إدارة قائمة الكلمات المحظورة والعقوبات')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  // أوامر الأذكار الجديدة
+  new SlashCommandBuilder()
+    .setName('azkar-setup')
+    .setDescription('إعداد وتفعيل نظام الأذكار التلقائية في السيرفر')
+    .addChannelOption(opt => opt.setName('القناة').setDescription('اختر قناة الأذكار').addChannelTypes(ChannelType.GuildText).setRequired(true))
+    .addIntegerOption(opt => 
+      opt.setName('الساعات')
+        .setDescription('الفاصل الزمني بين كل ذكر والآخر بالساعات')
+        .setRequired(true)
+        .addChoices(
+          { name: 'ساعة واحدة', value: 1 },
+          { name: 'ساعتان', value: 2 },
+          { name: '3 ساعات', value: 3 },
+          { name: '6 ساعات', value: 6 },
+          { name: '12 ساعة', value: 12 },
+          { name: '24 ساعة (يومياً)', value: 24 }
+        )
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('azkar')
+    .setDescription('إرسال ذكر عشوائي فوراً في القناة الحالية'),
 
   new SlashCommandBuilder()
     .setName('ban')
     .setDescription('حظر عضو من السيرفر')
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو المراد حظره').setRequired(true))
     .addStringOption(opt => opt.setName('السبب').setDescription('أدخل سبب الحظر').setRequired(true)),
+  
   new SlashCommandBuilder()
     .setName('kick')
     .setDescription('طرد عضو من السيرفر')
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو المراد طرده').setRequired(true))
     .addStringOption(opt => opt.setName('السبب').setDescription('أدخل سبب الطرد').setRequired(true)),
+  
   new SlashCommandBuilder()
     .setName('timeout')
     .setDescription('كتم عضو مؤقتاً')
@@ -142,6 +184,7 @@ const commands = [
         )
     )
     .addStringOption(opt => opt.setName('السبب').setDescription('أدخل سبب الكتم').setRequired(true)),
+  
   new SlashCommandBuilder()
     .setName('warn')
     .setDescription('إرسال تحذير إداري لعضو')
@@ -152,6 +195,7 @@ const commands = [
     .setName('clear')
     .setDescription('مسح عدد محدد من الرسائل في الروم')
     .addIntegerOption(opt => opt.setName('العدد').setDescription('من 1 إلى 100').setRequired(true)),
+  
   new SlashCommandBuilder().setName('lock').setDescription('قفل الروم الحالية'),
   new SlashCommandBuilder().setName('unlock').setDescription('فتح الروم الحالية'),
   new SlashCommandBuilder().setName('ping').setDescription('فحص سرعة استجابة البوت'),
@@ -219,7 +263,13 @@ client.on('interactionCreate', async interaction => {
             { 
               name: '⭐ نظام اللفلات والرتب', 
               value: '`/level-setup` : إعداد وتخصيص نظام اللفلات ومعادلة الـ XP ورتب المكافآت.\n' +
-                     '`/level` : عرض بطاقة اللفل المصورة وإحصائيات الـ XP (كتابة وصوت).', 
+                     '`/level` : عرض بطاقة اللفل المصورة وإحصائيات الـ XP.', 
+              inline: false 
+            },
+            { 
+              name: '📿 نظام الأذكار الدينية', 
+              value: '`/azkar-setup` : تحديد قناة الأذكار والفاصل الزمني تلقائياً.\n' +
+                     '`/azkar` : إرسال ذكر مبارك فوراً.', 
               inline: false 
             },
             { 
@@ -244,6 +294,38 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
 
         return interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+      }
+
+      // إعداد نظام الأذكار
+      if (commandName === 'azkar-setup') {
+        const targetChannel = options.getChannel('القناة');
+        const hours = options.getInteger('الساعات');
+        
+        azkarSettings.set(guild.id, {
+          channelId: targetChannel.id,
+          intervalHours: hours,
+          lastSent: Date.now()
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle('📿 تم إعداد نظام الأذكار بنجاح!')
+          .setDescription(`سيتم إرسال الأذكار تلقائياً في القناة ${targetChannel} كل **${hours} ساعات**.`)
+          .setColor(0x2ECC71);
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // أمر إرسال ذكر فوري
+      if (commandName === 'azkar') {
+        const randomZikr = azkarList[Math.floor(Math.random() * azkarList.length)];
+        const embed = new EmbedBuilder()
+          .setTitle('📿 ذِكْرُ الله')
+          .setDescription(`> **${randomZikr}**`)
+          .setColor(0xE74C3C)
+          .setFooter({ text: `طلب بواسطة ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() })
+          .setTimestamp();
+
+        return interaction.reply({ embeds: [embed] });
       }
 
       if (commandName === 'admin-setup') {
@@ -314,26 +396,22 @@ client.on('interactionCreate', async interaction => {
           const canvas = createCanvas(800, 260);
           const ctx = canvas.getContext('2d');
 
-          // خلفية سوداء داكنة مع إطار أحمر احترافي
           ctx.fillStyle = '#0f0f12';
           ctx.beginPath();
           ctx.roundRect(0, 0, canvas.width, canvas.height, 20);
           ctx.fill();
 
-          // خلفية جمالية حمراء خفيفة في الجانب
           const gradientBg = ctx.createLinearGradient(0, 0, canvas.width, 0);
           gradientBg.addColorStop(0, 'rgba(231, 76, 60, 0.2)');
           gradientBg.addColorStop(1, 'rgba(15, 15, 18, 0)');
           ctx.fillStyle = gradientBg;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          // شريط التقدم الخلفي (المسار)
           ctx.fillStyle = '#1e1e24';
           ctx.beginPath();
           ctx.roundRect(240, 175, 510, 28, 14);
           ctx.fill();
 
-          // شريط التقدم الأمامي (تدرج أحمر ناري)
           const percentage = Math.min(userData.xp / nextLevelXp, 1);
           const progressWidth = Math.max(percentage * 510, 28);
           
@@ -346,12 +424,10 @@ client.on('interactionCreate', async interaction => {
           ctx.roundRect(240, 175, progressWidth, 28, 14);
           ctx.fill();
 
-          // كتابة اسم العضو
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 32px sans-serif';
           ctx.fillText(targetUser.username, 240, 65);
 
-          // تفاصيل اللفل والـ XP باللون الأحمر الزاهي والأبيض
           ctx.fillStyle = '#ff4d4d';
           ctx.font = 'bold 22px sans-serif';
           ctx.fillText(`LEVEL: ${userData.level}`, 240, 110);
@@ -360,12 +436,10 @@ client.on('interactionCreate', async interaction => {
           ctx.font = '18px sans-serif';
           ctx.fillText(`XP: ${userData.xp} /${nextLevelXp}`, 400, 110);
 
-          // إحصائيات الكتابة والصوت
           ctx.fillStyle = '#aaaaaa';
           ctx.font = '16px sans-serif';
           ctx.fillText(`Chat: ${userData.chatXp} XP   \vert{}   Voice:${userData.voiceXp} XP`, 240, 150);
 
-          // رسم توهج أحمر خلف الصورة الشخصية (Glow)
           ctx.save();
           ctx.shadowColor = '#ff1a1a';
           ctx.shadowBlur = 25;
@@ -375,7 +449,6 @@ client.on('interactionCreate', async interaction => {
           ctx.fill();
           ctx.restore();
 
-          // رسم صورة البروفايل الدائرية
           ctx.save();
           ctx.beginPath();
           ctx.arc(120, 130, 72, 0, Math.PI * 2, true);
@@ -1234,6 +1307,31 @@ client.on('messageCreate', async message => {
 
   userLevels.set(key, userData);
 });
+
+// مؤقت إرسال الأذكار التلقائية حسب الفاصل الزمني المحدد
+setInterval(() => {
+  const now = Date.now();
+  azkarSettings.forEach(async (data, guildId) => {
+    const elapsedHours = (now - data.lastSent) / (1000 * 60 * 60);
+    if (elapsedHours >= data.intervalHours) {
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) return;
+      const channel = guild.channels.cache.get(data.channelId);
+      if (!channel) return;
+
+      const randomZikr = azkarList[Math.floor(Math.random() * azkarList.length)];
+      const zikrEmbed = new EmbedBuilder()
+        .setTitle('📿 تذكير: أذكار المسلم')
+        .setDescription(`> **${randomZikr}**`)
+        .setColor(0xE74C3C)
+        .setTimestamp();
+
+      await channel.send({ embeds: [zikrEmbed] }).catch(() => {});
+      data.lastSent = now;
+      azkarSettings.set(guildId, data);
+    }
+  });
+}, 60000);
 
 setInterval(() => {
   client.guilds.cache.forEach(guild => {
