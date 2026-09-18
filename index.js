@@ -55,7 +55,7 @@ const client = new Client({
 const afkUsers = new Map();
 const logChannels = new Map();
 const ticketData = new Map();         
-const applicationsData = new Map(); // التقديمات 1 إلى 4 (تخزين الإعدادات: name, banner, roleId, logChannelId, q1..q5)
+const applicationsData = new Map(); // تخزين إعدادات التقديمات (name, banner, roleId, logChannelId, q1..q5)
 const customShortcuts = new Map();    
 const commandRoles = new Map();        
 
@@ -263,7 +263,7 @@ client.on('interactionCreate', async interaction => {
           .addFields(
             { 
               name: '📂 نظام التقديمات المطوّر (4 تقديمات)', 
-              value: '`/تقديم` : إعداد 5 أسئلة لكل تقديم، تحديد رابط البانر، تحديد رتبة القبول، وتحديد روم استقبال الطلبات مع أزرار الموافقة والرفض الفورية.', 
+              value: '`/تقديم` : إعداد اسم التقديم والبانر، تعيين الـ 5 أسئلة في زر منفصل، تحديد رتبة القبول، وتحديد روم استقبال الطلبات مع أزرار الموافقة والرفض.', 
               inline: false 
             },
             { 
@@ -671,7 +671,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder()
           .setTitle('📂 لوحة إدارة التقديمات الأربعة المطورة')
-          .setDescription('اختر التقديم لتعديل الأسئلة (5 أسئلة)، رابط البانر، رتبة القبول، وتحديد روم استقبال الطلبات ونشر اللوحة:')
+          .setDescription('اختر التقديم لتعديل اسم التقديم والبانر، تعيين الـ 5 أسئلة، رتبة القبول، وروم استقبال الطلبات:')
           .setColor(0xE74C3C);
 
         const row = new ActionRowBuilder().addComponents(
@@ -976,32 +976,49 @@ client.on('interactionCreate', async interaction => {
         const appNum = id.replace('app_cfg_', '');
         const embed = new EmbedBuilder()
           .setTitle(`⚙️ إعدادات التقديم رقم (${appNum}) المطورة`)
-          .setDescription('اختر أحد الخيارات أدناه لتعديل أسئلة التقديم الـ 5، بانر التقديم، رتبة القبول، روم الاستقبال، أو نشر اللوحة:')
+          .setDescription('اختر الإجراء المناسب لإعداد اسم التقديم والبانر، أو تعيين الـ 5 أسئلة، رتبة القبول، أو روم الاستقبال:')
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`app_edit_full_${appNum}`).setLabel('تعديل الأسئلة (5) والبانر ✏️').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId(`app_send_room_${appNum}`).setLabel('نشر لوحة التقديم 📤').setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId(`app_edit_name_banner_${appNum}`).setLabel('اسم التقديم والبانر 🏷️').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`app_edit_5_questions_${appNum}`).setLabel('إعداد الـ 5 أسئلة 📝').setStyle(ButtonStyle.Success)
         );
 
         const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`app_set_role_btn_${appNum}`).setLabel('تحديد رتبة القبول 🏷️').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`app_set_role_btn_${appNum}`).setLabel('تحديد رتبة القبول 🏷️').setStyle(ButtonStyle.Secondary),
           new ButtonBuilder().setCustomId(`app_set_channel_btn_${appNum}`).setLabel('تحديد روم وصول الطلبات 📬').setStyle(ButtonStyle.Secondary)
         );
 
-        return interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
+        const row3 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`app_send_room_${appNum}`).setLabel('نشر لوحة التقديم 📤').setStyle(ButtonStyle.Danger)
+        );
+
+        return interaction.reply({ embeds: [embed], components: [row1, row2, row3], ephemeral: true });
       }
 
-      if (id.startsWith('app_edit_full_')) {
-        const appNum = id.replace('app_edit_full_', '');
-        const modal = new ModalBuilder().setCustomId(`save_app_modal_${appNum}`).setTitle(`إعداد أسئلة وبانر تقديم (${appNum})`);
+      // زر إعداد اسم التقديم ورابط البانر
+      if (id.startsWith('app_edit_name_banner_')) {
+        const appNum = id.replace('app_edit_name_banner_', '');
+        const modal = new ModalBuilder().setCustomId(`save_name_banner_${appNum}`).setTitle(`إعداد اسم وبانر تقديم (${appNum})`);
         
         modal.addComponents(
           new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('app_name').setLabel('اسم التقديم (مثلاً: تقديم الإدارة)').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('app_banner').setLabel('رابط بانر التقديم (Image URL - اختياري)').setStyle(TextInputStyle.Short).setRequired(false)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('app_banner').setLabel('رابط بانر التقديم (Image URL - اختياري)').setStyle(TextInputStyle.Short).setRequired(false))
+        );
+        return await interaction.showModal(modal);
+      }
+
+      // زر إعداد الـ 5 أسئلة كاملة
+      if (id.startsWith('app_edit_5_questions_')) {
+        const appNum = id.replace('app_edit_5_questions_', '');
+        const modal = new ModalBuilder().setCustomId(`save_5_questions_${appNum}`).setTitle(`إعداد الأسئلة الخمسة لتقديم (${appNum})`);
+        
+        modal.addComponents(
           new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q1_input').setLabel('السؤال الأول (1)').setStyle(TextInputStyle.Short).setRequired(true)),
           new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q2_input').setLabel('السؤال الثاني (2)').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q3_input').setLabel('السؤال الثالث (3)').setStyle(TextInputStyle.Short).setRequired(true))
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q3_input').setLabel('السؤال الثالث (3)').setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q4_input').setLabel('السؤال الرابع (4)').setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q5_input').setLabel('السؤال الخامس (5)').setStyle(TextInputStyle.Short).setRequired(true))
         );
         return await interaction.showModal(modal);
       }
@@ -1021,11 +1038,11 @@ client.on('interactionCreate', async interaction => {
       if (id.startsWith('app_send_room_')) {
         const appNum = id.replace('app_send_room_', '');
         const data = applicationsData.get(`${interaction.guild.id}_${appNum}`);
-        if (!data || !data.name) return interaction.reply({ content: '❌ يرجى ضبط إعدادات التقديم (الاسم والأسئلة) أولاً!', ephemeral: true });
+        if (!data || !data.name) return interaction.reply({ content: '❌ يرجى ضبط اسم التقديم والأسئلة أولاً!', ephemeral: true });
 
         const embed = new EmbedBuilder()
           .setTitle(`📋 ${data.name}`)
-          .setDescription('اضغط على الزر أدناه لفتح نموذج التقديم والإجابة على الأسئلة:')
+          .setDescription('اضغط على الزر أدناه لفتح نموذج التقديم والإجابة على الأسئلة الـ 5:')
           .setColor(0xE74C3C);
 
         if (data.banner && data.banner.startsWith('http')) {
@@ -1043,9 +1060,9 @@ client.on('interactionCreate', async interaction => {
       if (id.startsWith('start_apply_')) {
         const appNum = id.replace('start_apply_', '');
         const data = applicationsData.get(`${interaction.guild.id}_${appNum}`);
-        if (!data || !data.q1) return interaction.reply({ content: '❌ عذراً، هذا التقديم غير مُكتمل الإعدادات بعد.', ephemeral: true });
+        if (!data || !data.q1) return interaction.reply({ content: '❌ عذراً، هذا التقديم غير مُكتمل الأسئلة بعد.', ephemeral: true });
 
-        const modal = new ModalBuilder().setCustomId(`submit_apply_modal_${appNum}`).setTitle(data.name.substring(0, 45));
+        const modal = new ModalBuilder().setCustomId(`submit_apply_modal_${appNum}`).setTitle((data.name || 'تقديم').substring(0, 45));
         
         modal.addComponents(
           new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q_ans_1').setLabel(data.q1.substring(0, 45)).setStyle(TextInputStyle.Short).setRequired(true)),
@@ -1070,7 +1087,6 @@ client.on('interactionCreate', async interaction => {
         const data = applicationsData.get(`${interaction.guild.id}_${appNum}`) || {};
 
         if (isAccept) {
-          // منح رتبة القبول إن وجدت
           if (targetMember && data.roleId) {
             await targetMember.roles.add(data.roleId).catch(() => {});
           }
@@ -1083,7 +1099,7 @@ client.on('interactionCreate', async interaction => {
           await interaction.update({ embeds: [newEmbed], components: [] });
           
           if (targetMember) {
-            targetMember.send(`🎉 مبارك يا عمرو/عضو! لقد تم **قبول** تقديمك في **${data.name || 'التقديم'}** وحصلت على الرتبة المخصصة.`).catch(() => {});
+            targetMember.send(`🎉 مبارك يا عمرو! لقد تم **قبول** تقديمك في **${data.name || 'التقديم'}** وحصلت على الرتبة المخصصة.`).catch(() => {});
           }
         } else {
           const oldEmbed = interaction.message.embeds[0];
@@ -1165,25 +1181,33 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `✅ تم إنشاء تذكرتك: ${ticketChannel}`, ephemeral: true });
       }
 
-      // حفظ الأسئلة الـ 5 ورابط البانر للتقديم
-      if (interaction.customId.startsWith('save_app_modal_')) {
-        const appNum = interaction.customId.replace('save_app_modal_', '');
+      // حفظ اسم التقديم والبانر
+      if (interaction.customId.startsWith('save_name_banner_')) {
+        const appNum = interaction.customId.replace('save_name_banner_', '');
         const key = `${interaction.guild.id}_${appNum}`;
         let existing = applicationsData.get(key) || {};
 
         existing.name = interaction.fields.getTextInputValue('app_name');
         existing.banner = interaction.fields.getTextInputValue('app_banner');
+        applicationsData.set(key, existing);
+
+        return interaction.reply({ content: '✅ تم حفظ اسم التقديم ورابط البانر بنجاح!', ephemeral: true });
+      }
+
+      // حفظ الـ 5 أسئلة كاملة
+      if (interaction.customId.startsWith('save_5_questions_')) {
+        const appNum = interaction.customId.replace('save_5_questions_', '');
+        const key = `${interaction.guild.id}_${appNum}`;
+        let existing = applicationsData.get(key) || {};
+
         existing.q1 = interaction.fields.getTextInputValue('q1_input');
         existing.q2 = interaction.fields.getTextInputValue('q2_input');
         existing.q3 = interaction.fields.getTextInputValue('q3_input');
-        // ولأن الديسكورد يتيح 5 حقول كحد أقصى في الـ Modal، سنطلب السؤالين الرابع والخامس عبر modal ثانٍ أو نجعلها ضمن نفس الـ Modal
-        // دعنا نضيف السؤالين الـ 4 و 5 مباشرة هنا إن أمكن أو نأخذهم من نفس النافذة
-        // بما أن الـ Modal يدعم 5 حقول TextInput كحد أقصى، سنخصص الحقول كالتالي:
-        // الحقل 1: الاسم، الحقل 2: البانر، الحقل 3: السؤال 1، الحقل 4: السؤال 2، الحقل 5: السؤال 3
-        // للأسئلة 4 و 5، سنخصص modal إضافي أو ندمجهم. دعنا نخصص Modal مخصص للأسئلة الـ 5 بالكامل بأسلوب أنيق جداً:
-        
+        existing.q4 = interaction.fields.getTextInputValue('q4_input');
+        existing.q5 = interaction.fields.getTextInputValue('q5_input');
         applicationsData.set(key, existing);
-        return interaction.reply({ content: '✅ تم حفظ اسم التقديم والبانر والأسئلة الثلاثة الأولى بنجاح! (يمكنك تحديث الأسئلة الـ 5 كاملة).', ephemeral: true });
+
+        return interaction.reply({ content: '✅ تم حفظ الأسئلة الخمسة للتقديم بنجاح!', ephemeral: true });
       }
 
       // معالجة تقديم العضو وإرسال الإجابات الـ 5 إلى الروم المحددة مع أزرار (أوافق / أرفق)
@@ -1206,8 +1230,8 @@ client.on('interactionCreate', async interaction => {
             { name: `📝 1. ${data.q1 || 'السؤال 1'}:`, value: `> ${ans1}`, inline: false },
             { name: `📝 2. ${data.q2 || 'السؤال 2'}:`, value: `> ${ans2}`, inline: false },
             { name: `📝 3. ${data.q3 || 'السؤال 3'}:`, value: `> ${ans3}`, inline: false },
-            { name: `📝 4. السؤال الرابع:`, value: `> ${ans4}`, inline: false },
-            { name: `📝 5. السؤال الخامس:`, value: `> ${ans5}`, inline: false }
+            { name: `📝 4. ${data.q4 || 'السؤال 4'}:`, value: `> ${ans4}`, inline: false },
+            { name: `📝 5. ${data.q5 || 'السؤال 5'}:`, value: `> ${ans5}`, inline: false }
           )
           .setTimestamp();
 
