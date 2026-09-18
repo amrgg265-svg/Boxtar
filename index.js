@@ -383,14 +383,17 @@ client.on('interactionCreate', async interaction => {
 
     if (commandName === 'logs') {
       await interaction.deferReply({ ephemeral: true });
-      const embed = new EmbedBuilder().setTitle('📑 إعداد السجلات').setDescription('اختر نوع السجل وتحديد قناته:').setColor(0x2B2D31);
-      const row = new ActionRowBuilder().addComponents(
+      const embed = new EmbedBuilder().setTitle('📑 إعداد السجلات').setDescription('اختر نوع السجل وتحديد قناته (شامل سجل التكتات):').setColor(0x2B2D31);
+      const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('set_log_ban').setLabel('سجل الباند 🔨').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('set_log_kick').setLabel('سجل الطرد 👢').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('set_log_timeout').setLabel('سجل التايم ⏰').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('set_log_warn').setLabel('سجل التحذير ⚠️').setStyle(ButtonStyle.Secondary)
       );
-      return interaction.editReply({ embeds: [embed], components: [row] });
+      const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('set_log_ticket').setLabel('سجل التكت 🎫').setStyle(ButtonStyle.Success)
+      );
+      return interaction.editReply({ embeds: [embed], components: [row1, row2] });
     }
 
     if (commandName === 'afk') {
@@ -461,7 +464,6 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: `📌 **حدد الرتبة التي تريد منحها صلاحية استخدام أمر \`/${selectedCmd}\`:**`, components: [row], ephemeral: true });
     }
 
-    // [قائمة خيار قائمة التكت الاحترافية بناءً على طلبك]
     if (interaction.customId === 'ticket_options_menu') {
       const selectedOption = interaction.values[0];
       if (selectedOption === 't_come') {
@@ -475,6 +477,8 @@ client.on('interactionCreate', async interaction => {
       } else if (selectedOption === 't_rating') {
         return interaction.reply({ content: '⭐ **جاري فتح نموذج تقييم الإداري (مستلم التذكره)...**', ephemeral: true });
       } else if (selectedOption === 't_close') {
+        // جلب الرسائل وإرسال سجل التكت قبل الحذف
+        await handleTicketCloseLog(interaction.channel, interaction.guild, interaction.user);
         await interaction.channel.delete().catch(() => {});
       } else if (selectedOption === 't_unclaim') {
         return interaction.reply({ content: '❌ **تم إلغاء استلام التذكرة.**', ephemeral: true });
@@ -615,6 +619,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (id === 'close_ticket') {
+      await handleTicketCloseLog(interaction.channel, interaction.guild, interaction.user);
       await interaction.channel.delete().catch(() => {});
     }
 
@@ -748,21 +753,18 @@ client.on('interactionCreate', async interaction => {
 
       const welcomeText = settings.welcomeMsg || 'يرجى انتظار مسؤولي التذكرة الرد عليك';
       
-      // [تكبير وتعديل النصوص لتكون واضحة وكبيرة كما في صورك]
       const ticketEmbed = new EmbedBuilder()
         .setTitle('🎫  تـذكـرة جـديـدة  🎫')
         .setDescription(`### **مرحباً بك ${user} !**\n\n${welcomeText}\n\n**📝 السبب المدخل:**\n\`\`\`${reason}\`\`\``)
         .setColor(0x5865F2)
         .setTimestamp();
 
-      // الصف الأول: زر طلب الدعم + زر الاستلام (أخضر) + زر الغلق
       const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('ticket_support_btn').setLabel('طلب الدعم').setEmoji('👤').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('claim_ticket').setLabel('استلام').setEmoji('🟢').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق').setEmoji('🗑️').setStyle(ButtonStyle.Secondary)
       );
 
-      // الصف الثاني: قائمة خيارات التكت (المطابقة لطلبك)
       const ticketOptionsSelect = new StringSelectMenuBuilder()
         .setCustomId('ticket_options_menu')
         .setPlaceholder('📂 خيارات التكت')
@@ -780,7 +782,7 @@ client.on('interactionCreate', async interaction => {
       const row2 = new ActionRowBuilder().addComponents(ticketOptionsSelect);
 
       await ticketChannel.send({
-        content: `${user} ${data.supportRoleId ? `<@&${data.supportRoleId}>` : ''}`, 
+        content: `${user}${data.supportRoleId ? `<@&${data.supportRoleId}>` : ''}`, 
         embeds: [ticketEmbed],
         components: [row1, row2]
       });
@@ -821,6 +823,42 @@ client.on('interactionCreate', async interaction => {
     }
   }
 });
+
+// وظيفة جلب رسائل ومحادثات التذكرة وإرسالها لروم سجل التكتات عند الإغلاق
+async function handleTicketCloseLog(channel, guild, closedBy) {
+  const guildLogs = logChannels.get(guild.id);
+  if (!guildLogs || !guildLogs['ticket']) return;
+  const logChannel = guild.channels.cache.get(guildLogs['ticket']);
+  if (!logChannel) return;
+
+  try {
+    const fetchedMessages = await channel.messages.fetch({ limit: 100 });
+    const sortedMessages = Array.from(fetchedMessages.values()).reverse();
+
+    let transcript = sortedMessages
+      .map(m => `[${new Date(m.createdTimestamp).toLocaleTimeString()}] ${m.author.tag}:${m.content || '[محتوى غير نصي/صورة]'}`)
+      .join('\n');
+
+    if (transcript.length > 3900) {
+      transcript = transcript.substring(transcript.length - 3900) + '\n... (تم الاختصار لطول المحتوى)';
+    }
+    if (!transcript) transcript = 'لا توجد رسائل مسجلة في التذكرة.';
+
+    const logEmbed = new EmbedBuilder()
+      .setTitle('🎫 سجل إغلاق وتفاصيل محادثات التذكرة')
+      .setColor(0xE74C3C)
+      .addFields(
+        { name: '📁 اسم التذكرة:', value: `\`${channel.name}\``, inline: true },
+        { name: '🛡️ أُغلقت بواسطة:', value: `${closedBy.tag}`, inline: true },
+        { name: '💬 سجل المحادثات الكامل:', value: `\`\`\`text\n${transcript}\n\`\`\`` }
+      )
+      .setTimestamp();
+
+    await logChannel.send({ embeds: [logEmbed] });
+  } catch (err) {
+    console.error('خطأ أثناء حفظ سجل التذكرة:', err);
+  }
+}
 
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
