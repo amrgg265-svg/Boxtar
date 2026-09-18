@@ -59,7 +59,6 @@ const applicationsData = new Map();
 const customShortcuts = new Map();    
 const commandRoles = new Map();        
 
-// متغيرات نظام اللفلات الجديدة
 const levelSettings = new Map();   
 const userLevels = new Map();      
 const levelRoles = new Map();      
@@ -97,7 +96,6 @@ const commands = [
     .setDescription('إعداد وتحديد قنوات السجلات الخاصة والإجراءات والتذاكر')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // أوامر اللفلات الجديدة
   new SlashCommandBuilder()
     .setName('level-setup')
     .setDescription('إعداد وتخصيص نظام اللفلات، معادلة الـ XP، ورتب المكافآت')
@@ -204,7 +202,7 @@ client.on('interactionCreate', async interaction => {
 
       if (commandName === 'help') {
         const helpEmbed = new EmbedBuilder()
-          .setColor(0x00FF99)
+          .setColor(0xE74C3C)
           .setTitle('🤖 دليل وقائمة أوامر بوت Boxtar')
           .setDescription('أهلاً بك! إليك قائمة بجميع الأوامر المتاحة في البوت وشرح وظيفة كل أمر:')
           .addFields(
@@ -285,16 +283,15 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
-      // أوامر إعداد اللفلات والـ Level Card
       if (commandName === 'level-setup') {
         await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder()
           .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels)')
           .setDescription('اختر الإجراء المناسب لضبط نظام التفاعل واللفلات في السيرفر:')
-          .setColor(0xF1C40F);
+          .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('lvl_set_formula').setLabel('تحديد الـ XP الأساسي (للصعود)').setEmoji('📈').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('lvl_set_formula').setLabel('تحديد الـ XP الأساسي (للصعود)').setEmoji('📈').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId('lvl_set_reward').setLabel('ربط لفل برتبة (Reward)').setEmoji('🎁').setStyle(ButtonStyle.Success)
         );
         const row2 = new ActionRowBuilder().addComponents(
@@ -314,42 +311,80 @@ client.on('interactionCreate', async interaction => {
         const nextLevelXp = (userData.level + 1) * settings.baseMultiplier;
 
         try {
-          const canvas = createCanvas(700, 250);
+          const canvas = createCanvas(800, 260);
           const ctx = canvas.getContext('2d');
 
-          ctx.fillStyle = '#1e1f22';
+          // خلفية سوداء داكنة مع إطار أحمر احترافي
+          ctx.fillStyle = '#0f0f12';
+          ctx.beginPath();
+          ctx.roundRect(0, 0, canvas.width, canvas.height, 20);
+          ctx.fill();
+
+          // خلفية جمالية حمراء خفيفة في الجانب
+          const gradientBg = ctx.createLinearGradient(0, 0, canvas.width, 0);
+          gradientBg.addColorStop(0, 'rgba(231, 76, 60, 0.2)');
+          gradientBg.addColorStop(1, 'rgba(15, 15, 18, 0)');
+          ctx.fillStyle = gradientBg;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          ctx.fillStyle = '#2b2d31';
+          // شريط التقدم الخلفي (المسار)
+          ctx.fillStyle = '#1e1e24';
           ctx.beginPath();
-          ctx.roundRect(220, 160, 440, 25, 12.5);
+          ctx.roundRect(240, 175, 510, 28, 14);
           ctx.fill();
 
+          // شريط التقدم الأمامي (تدرج أحمر ناري)
           const percentage = Math.min(userData.xp / nextLevelXp, 1);
-          const progressWidth = Math.max(percentage * 440, 25);
-          ctx.fillStyle = '#5865F2';
+          const progressWidth = Math.max(percentage * 510, 28);
+          
+          const redGradient = ctx.createLinearGradient(240, 0, 750, 0);
+          redGradient.addColorStop(0, '#ff2a2a');
+          redGradient.addColorStop(1, '#990000');
+          
+          ctx.fillStyle = redGradient;
           ctx.beginPath();
-          ctx.roundRect(220, 160, progressWidth, 25, 12.5);
+          ctx.roundRect(240, 175, progressWidth, 28, 14);
           ctx.fill();
 
+          // كتابة اسم العضو
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 28px sans-serif';
-          ctx.fillText(targetUser.username, 220, 60);
+          ctx.font = 'bold 32px sans-serif';
+          ctx.fillText(targetUser.username, 240, 65);
 
-          ctx.fillStyle = '#b5bac1';
+          // تفاصيل اللفل والـ XP باللون الأحمر الزاهي والأبيض
+          ctx.fillStyle = '#ff4d4d';
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillText(`LEVEL: ${userData.level}`, 240, 110);
+
+          ctx.fillStyle = '#cccccc';
           ctx.font = '18px sans-serif';
-          ctx.fillText(`اللفل: ${userData.level}  |  الـ XP: ${userData.xp} /${nextLevelXp}`, 220, 100);
-          ctx.fillText(`💬 كتابة: ${userData.chatXp} XP  \vert{}  🔊 صوت: ${userData.voiceXp} XP`, 220, 130);
+          ctx.fillText(`XP: ${userData.xp} /${nextLevelXp}`, 400, 110);
 
+          // إحصائيات الكتابة والصوت
+          ctx.fillStyle = '#aaaaaa';
+          ctx.font = '16px sans-serif';
+          ctx.fillText(`Chat: ${userData.chatXp} XP   \vert{}   Voice:${userData.voiceXp} XP`, 240, 150);
+
+          // رسم توهج أحمر خلف الصورة الشخصية (Glow)
+          ctx.save();
+          ctx.shadowColor = '#ff1a1a';
+          ctx.shadowBlur = 25;
+          ctx.beginPath();
+          ctx.arc(120, 130, 75, 0, Math.PI * 2, true);
+          ctx.fillStyle = '#ff1a1a';
+          ctx.fill();
+          ctx.restore();
+
+          // رسم صورة البروفايل الدائرية
           ctx.save();
           ctx.beginPath();
-          ctx.arc(110, 125, 75, 0, Math.PI * 2, true);
+          ctx.arc(120, 130, 72, 0, Math.PI * 2, true);
           ctx.closePath();
           ctx.clip();
 
           const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 256 });
           const avatar = await loadImage(avatarURL);
-          ctx.drawImage(avatar, 35, 50, 150, 150);
+          ctx.drawImage(avatar, 48, 58, 144, 144);
           ctx.restore();
 
           const attachment = { attachment: canvas.toBuffer('image/png'), name: 'rank-card.png' };
@@ -371,7 +406,7 @@ client.on('interactionCreate', async interaction => {
 
       if (commandName === 'avatar') {
         const user = options.getUser('العضو') || interaction.user;
-        const embed = new EmbedBuilder().setTitle(`🖼️ صورة ${user.username}`).setImage(user.displayAvatarURL({ dynamic: true, size: 1024 })).setColor(0x3498DB);
+        const embed = new EmbedBuilder().setTitle(`🖼️ صورة ${user.username}`).setImage(user.displayAvatarURL({ dynamic: true, size: 1024 })).setColor(0xE74C3C);
         return interaction.reply({ embeds: [embed] });
       }
 
@@ -386,7 +421,7 @@ client.on('interactionCreate', async interaction => {
             { name: '📅 إنشاء الحساب:', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:R>`, inline: true },
             { name: '📥 الانضمام:', value: targetMember ? `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:R>` : 'غير معروف', inline: true }
           )
-          .setColor(0x2ECC71);
+          .setColor(0xE74C3C);
         return interaction.reply({ embeds: [embed] });
       }
 
@@ -399,7 +434,7 @@ client.on('interactionCreate', async interaction => {
             { name: '👥 الأعضاء:', value: `${guild.memberCount}`, inline: true },
             { name: '💬 الرومات:', value: `${guild.channels.cache.size}`, inline: true }
           )
-          .setColor(0xF1C40F);
+          .setColor(0xE74C3C);
         return interaction.reply({ embeds: [embed] });
       }
 
@@ -424,10 +459,10 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder()
           .setTitle('🛡️ نظام تصفية الألفاظ والرقابة')
           .setDescription('إدارة وقاية الشات من الكلمات المسيئة والمحظورة تلقائياً')
-          .setColor(0x3498DB);
+          .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('bw_list').setLabel('سجل الألفاظ الممنوعة').setEmoji('📜').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('bw_list').setLabel('سجل الألفاظ الممنوعة').setEmoji('📜').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId('bw_delete').setLabel('إزالة كلمة محددة').setEmoji('⚡').setStyle(ButtonStyle.Secondary)
         );
 
@@ -448,7 +483,7 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder()
           .setTitle('🎫 اعدادات التكت')
           .setDescription('اعدادات التكت من هنا')
-          .setColor(0x5865F2);
+          .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('tk_edit_panel').setLabel('تعديل عنوان الـ panel').setEmoji('✏️').setStyle(ButtonStyle.Primary),
@@ -475,9 +510,9 @@ client.on('interactionCreate', async interaction => {
 
       if (commandName === 'تقديم') {
         await interaction.deferReply({ ephemeral: true });
-        const embed = new EmbedBuilder().setTitle('📂 لوحة التقديمات').setDescription('اختر التقديم لضبط إعداداته:').setColor(0x8E44AD);
+        const embed = new EmbedBuilder().setTitle('📂 لوحة التقديمات').setDescription('اختر التقديم لضبط إعداداته:').setColor(0xE74C3C);
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('app_cfg_1').setLabel('إعداد تقديم (1)').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('app_cfg_1').setLabel('إعداد تقديم (1)').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId('app_cfg_2').setLabel('إعداد تقديم (2)').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId('app_cfg_3').setLabel('إعداد تقديم (3)').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId('app_cfg_4').setLabel('إعداد تقديم (4)').setStyle(ButtonStyle.Primary)
@@ -487,7 +522,7 @@ client.on('interactionCreate', async interaction => {
 
       if (commandName === 'logs') {
         await interaction.deferReply({ ephemeral: true });
-        const embed = new EmbedBuilder().setTitle('📑 إعداد السجلات').setDescription('اختر نوع السجل وتحديد قناته (شامل سجل التكتات):').setColor(0x2B2D31);
+        const embed = new EmbedBuilder().setTitle('📑 إعداد السجلات').setDescription('اختر نوع السجل وتحديد قناته (شامل سجل التكتات):').setColor(0xE74C3C);
         const row1 = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('set_log_ban').setLabel('سجل الباند 🔨').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId('set_log_kick').setLabel('سجل الطرد 👢').setStyle(ButtonStyle.Primary),
@@ -510,7 +545,7 @@ client.on('interactionCreate', async interaction => {
         const user = options.getUser('العضو');
         const reason = options.getString('السبب');
         await guild.members.ban(user.id, { reason });
-        await sendLog(guild, 'ban', '🔨 سجل حظر جديد (Ban)', 0xC0392B, [
+        await sendLog(guild, 'ban', '🔨 سجل حظر جديد (Ban)', 0xE74C3C, [
           { name: '👤 العضو المحظور:', value: `${user.tag}` },
           { name: '🛡️ الإداري:', value: `${interaction.user.tag}` },
           { name: '📝 السبب الإجباري:', value: reason }
@@ -523,7 +558,7 @@ client.on('interactionCreate', async interaction => {
         const reason = options.getString('السبب');
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
         await targetMember.kick(reason);
-        await sendLog(guild, 'kick', '👢 سجل طرد جديد (Kick)', 0xE67E22, [
+        await sendLog(guild, 'kick', '👢 سجل طرد جديد (Kick)', 0xE74C3C, [
           { name: '👤 العضو المطرود:', value: `${user.tag}` },
           { name: '🛡️ الإداري:', value: `${interaction.user.tag}` },
           { name: '📝 السبب الإجباري:', value: reason }
@@ -537,7 +572,7 @@ client.on('interactionCreate', async interaction => {
         const reason = options.getString('السبب');
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
         await targetMember.timeout(duration, reason);
-        await sendLog(guild, 'timeout', '⏰ سجل كتم مؤقت (Timeout)', 0xF1C40F, [
+        await sendLog(guild, 'timeout', '⏰ سجل كتم مؤقت (Timeout)', 0xE74C3C, [
           { name: '👤 العضو المكتوم:', value: `${user.tag}` },
           { name: '🛡️ الإداري:', value: `${interaction.user.tag}` },
           { name: '⏱️ المدة:', value: `<t:${Math.floor((Date.now() + duration) / 1000)}:R>` },
@@ -686,12 +721,11 @@ client.on('interactionCreate', async interaction => {
           .setCustomId('select_embed_color')
           .setPlaceholder('اختر لون الامبد...')
           .addOptions(
+            { label: 'أحمر داكن', value: '15158332', emoji: '❤️' },
             { label: 'بنفسجي', value: '9807270', emoji: '💜' },
-            { label: 'أحمر', value: '15158332', emoji: '❤️' },
             { label: 'أزرق', value: '5793266', emoji: '💙' },
             { label: 'أخضر', value: '5763719', emoji: '💚' },
             { label: 'أصفر', value: '16776960', emoji: '💛' },
-            { label: 'برتقالي', value: '15105570', emoji: '🧡' },
             { label: 'أسود / داكن', value: '2895667', emoji: '🖤' }
           );
         const row = new ActionRowBuilder().addComponents(menu);
@@ -703,10 +737,10 @@ client.on('interactionCreate', async interaction => {
           .setCustomId('select_button_color')
           .setPlaceholder('اختر لون زر التكت...')
           .addOptions(
+            { label: 'أحمر (Danger)', value: `${ButtonStyle.Danger}`, emoji: '❤️' },
             { label: 'بنفسجي (Blurple)', value: `${ButtonStyle.Primary}`, emoji: '💜' },
             { label: 'أخضر (Success)', value: `${ButtonStyle.Success}`, emoji: '💚' },
-            { label: 'رمادي (Secondary)', value: `${ButtonStyle.Secondary}`, emoji: '🩶' },
-            { label: 'أحمر (Danger)', value: `${ButtonStyle.Danger}`, emoji: '❤️' }
+            { label: 'رمادي (Secondary)', value: `${ButtonStyle.Secondary}`, emoji: '🩶' }
           );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.reply({ content: '🔘 **اختر لون زر فتح التكت:**', components: [row], ephemeral: true });
@@ -742,8 +776,8 @@ client.on('interactionCreate', async interaction => {
           return interaction.reply({ content: '❌ **يرجى تعديل عنوان الـ panel وتعيين بيانات الزر أولاً!**', ephemeral: true });
         }
 
-        const embedColor = data.embedColor ? parseInt(data.embedColor) : 0x5865F2;
-        const buttonStyle = data.buttonStyle ? parseInt(data.buttonStyle) : ButtonStyle.Primary;
+        const embedColor = data.embedColor ? parseInt(data.embedColor) : 0xE74C3C;
+        const buttonStyle = data.buttonStyle ? parseInt(data.buttonStyle) : ButtonStyle.Danger;
 
         const embed = new EmbedBuilder()
           .setTitle(data.title)
@@ -814,7 +848,6 @@ client.on('interactionCreate', async interaction => {
         await interaction.channel.delete().catch(() => {});
       }
 
-      // تفاعلات أزرار إعدادات اللفلات
       if (id === 'lvl_set_formula') {
         const modal = new ModalBuilder().setCustomId('save_lvl_formula').setTitle('تحديد الـ XP الأساسي للفل');
         const baseInput = new TextInputBuilder().setCustomId('base_xp').setLabel('الـ XP الأساسي (مثلاً 200)').setStyle(TextInputStyle.Short).setRequired(true);
@@ -849,10 +882,10 @@ client.on('interactionCreate', async interaction => {
 
       if (id.startsWith('app_cfg_')) {
         const appNum = id.replace('app_cfg_', '');
-        const embed = new EmbedBuilder().setTitle(`⚙️ إعدادات التقديم رقم (${appNum})`).setDescription(`اضغط على **تعديل الإعدادات والأسئلة** لتحديد الاسم والأسئلة:`).setColor(0x9B59B6);
+        const embed = new EmbedBuilder().setTitle(`⚙️ إعدادات التقديم رقم (${appNum})`).setDescription(`اضغط على **تعديل الإعدادات والأسئلة** لتحديد الاسم والأسئلة:`).setColor(0xE74C3C);
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`app_edit_full_${appNum}`).setLabel('تعديل الإعدادات والأسئلة ✏️').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId(`app_send_room_${appNum}`).setLabel('نشر اللوحة في القناة 📤').setStyle(ButtonStyle.Primary)
+          new ButtonBuilder().setCustomId(`app_send_room_${appNum}`).setLabel('نشر اللوحة في القناة 📤').setStyle(ButtonStyle.Danger)
         );
         return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
       }
@@ -881,9 +914,9 @@ client.on('interactionCreate', async interaction => {
         const data = applicationsData.get(`${interaction.guild.id}_${appNum}`);
         if (!data) return interaction.reply({ content: '❌ **لم تقم بضبط إعدادات هذا التقديم بعد!**', ephemeral: true });
 
-        const embed = new EmbedBuilder().setTitle(`📋 ${data.name}`).setDescription('اضغط على الزر أدناه لبدء تعبئة نموذج التقديم:').setColor(0x3498DB);
+        const embed = new EmbedBuilder().setTitle(`📋 ${data.name}`).setDescription('اضغط على الزر أدناه لبدء تعبئة نموذج التقديم:').setColor(0xE74C3C);
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`start_apply_${appNum}`).setLabel(`تقديم على ${data.name}`).setEmoji('📝').setStyle(ButtonStyle.Success)
+          new ButtonBuilder().setCustomId(`start_apply_${appNum}`).setLabel(`تقديم على ${data.name}`).setEmoji('📝').setStyle(ButtonStyle.Danger)
         );
         await interaction.channel.send({ embeds: [embed], components: [row] });
         return interaction.reply({ content: `✅ **تم نشر لوحة (${data.name}) في القناة بنجاح!**`, ephemeral: true });
@@ -944,7 +977,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ **تم حفظ رسالة الترحيب بنجاح!**', ephemeral: true });
       }
 
-      // حفظ إعدادات اللفلات
       if (interaction.customId === 'save_lvl_formula') {
         const baseXp = parseInt(interaction.fields.getTextInputValue('base_xp')) || 200;
         levelSettings.set(interaction.guild.id, { baseMultiplier: baseXp });
@@ -994,13 +1026,13 @@ client.on('interactionCreate', async interaction => {
         const ticketEmbed = new EmbedBuilder()
           .setTitle('🎫  تـذكـرة جـديـدة  🎫')
           .setDescription(`### **مرحباً بك ${user} !**\n\n${welcomeText}\n\n**📝 السبب المدخل:**\n\`\`\`${reason}\`\`\``)
-          .setColor(0x5865F2)
+          .setColor(0xE74C3C)
           .setTimestamp();
 
         const row1 = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('ticket_support_btn').setLabel('طلب الدعم').setEmoji('👤').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId('claim_ticket').setLabel('استلام').setEmoji('🟢').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق').setEmoji('🗑️').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
         );
 
         const ticketOptionsSelect = new StringSelectMenuBuilder()
@@ -1053,7 +1085,7 @@ client.on('interactionCreate', async interaction => {
         const resultEmbed = new EmbedBuilder()
           .setTitle(`📥 تقديم جديد لـ (${data.name})`)
           .addFields({ name: '👤 المتقدم:', value: `${user} (${user.tag})` }, ...fieldsList)
-          .setColor(0xF1C40F)
+          .setColor(0xE74C3C)
           .setTimestamp();
 
         await interaction.channel.send({ embeds: [resultEmbed] }).catch(() => {});
@@ -1105,7 +1137,6 @@ async function handleTicketCloseLog(channel, guild, closedBy) {
   }
 }
 
-// نظام كسب الـ XP من الكتابة في الشات
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
@@ -1171,7 +1202,6 @@ client.on('messageCreate', async message => {
     });
   }
 
-  // إضافة XP الكتابة
   const key = `${message.guild.id}_${message.author.id}`;
   let userData = userLevels.get(key) || { xp: 0, level: 0, chatXp: 0, voiceXp: 0 };
 
@@ -1189,7 +1219,7 @@ client.on('messageCreate', async message => {
     const levelUpEmbed = new EmbedBuilder()
       .setTitle('🎉 مبروك الترقي!')
       .setDescription(`تهانينا ${message.author}! لقد صعدت إلى **اللفل ${userData.level}** 🚀`)
-      .setColor(0x2ECC71);
+      .setColor(0xE74C3C);
     
     message.channel.send({ embeds: [levelUpEmbed] }).catch(() => {});
 
@@ -1205,7 +1235,6 @@ client.on('messageCreate', async message => {
   userLevels.set(key, userData);
 });
 
-// نظام كسب الـ XP من الرومات الصوتية (كل دقيقة)
 setInterval(() => {
   client.guilds.cache.forEach(guild => {
     guild.channels.cache.forEach(channel => {
@@ -1243,7 +1272,6 @@ setInterval(() => {
 const TOKEN = process.env.TOKEN;
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
-// تسجيل الأوامر بصورة صحيحة بعد جاهزية البوت
 client.once('ready', async () => {
   console.log(`✅ تم تنشيط البوت بنجاح باسم: ${client.user.tag}`);
   try {
