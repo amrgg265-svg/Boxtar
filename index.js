@@ -178,6 +178,52 @@ async function sendLog(guild, logType, title, color, fields) {
   await channel.send({ embeds: [logEmbed] }).catch(() => {});
 }
 
+// أمر /help الشامل لجميع أوامر البوت (يضاف في نهاية الملف)
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'help') {
+    const { EmbedBuilder } = require('discord.js');
+    
+    const helpEmbed = new EmbedBuilder()
+      .setColor(0x00FF99)
+      .setTitle('🤖 دليل وقائمة أوامر بوت Boxtar')
+      .setDescription('أهلاً بك! إليك قائمة بجميع الأوامر المتاحة في البوت وشرح وظيفة كل أمر:')
+      .addFields(
+        { 
+          name: '🛡️ الأوامر الإدارية', 
+          value: '`/admin-setup` : تحديد الرتب المصرح لها باستخدام الأوامر الإدارية.\n' +
+                 '`/clear` : مسح عدد محدد من الرسائل في الروم.\n' +
+                 '`/kick` : طرد عضو من السيرفر.\n' +
+                 '`/warn` : إرسال تحذير إداري لعضو.\n' +
+                 '`/lock` / `/unlock` : قفل أو فتح الروم الحالي.\n' +
+                 '`/shortcut` : إنشاء اختصار مخصص للأوامر الإدارية.', 
+          inline: false 
+        },
+        { 
+          name: '⚙️ أوامر النظام والأعضاء', 
+          value: '`/afk` : تفعيل وضع الغياب AFK.\n' +
+                 '`/avatar` : عرض صورة الحساب الشخصية.\n' +
+                 '`/bad-words` : إدارة قائمة الكلمات المحظورة والعقوبات.\n' +
+                 '`/logs` : إعداد وتحديث قنوات السجلات الخاصة والأحداث.\n' +
+                 '`/server-info` : عرض معلومات السيرفر.\n' +
+                 '`/user-info` : عرض تفاصيل الحساب.\n' +
+                 '`/ping` : فحص سرعة استجابة البوت.', 
+          inline: false 
+        },
+        { 
+          name: '📝 الأوامر الخاصة', 
+          value: '`/تقديم` : إدارة وتخصيص لوحات تقديم الأربعة.', 
+          inline: false 
+        }
+      )
+      .setFooter({ text: 'تم الطلب بواسطة ' + interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+  }
+});
+
 // معالجة التفاعلات
 client.on('interactionCreate', async interaction => {
 
