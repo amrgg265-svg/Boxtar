@@ -1,5 +1,5 @@
 // ==========================================
-// 1. تشغيل سيرفر الـ Keep-Alive (لمنع توقف البوت في المنصات المجانية)
+// 1. تشغيل سيرفر الـ Keep-Alive
 // ==========================================
 const express = require('express');
 const app = express();
@@ -14,7 +14,7 @@ app.listen(PORT, () => {
 });
 
 // ==========================================
-// 2. كود بوت ديسكورد الأساسي والميزات الكاملة
+// 2. كود بوت ديسكورد والميزات الكاملة
 // ==========================================
 const { 
   Client, 
@@ -48,7 +48,6 @@ client.once('clientReady', () => {
   console.log(`✅ تم تنشيط البوت بنجاح باسم: ${client.user.tag}`);
 });
 
-// تخزين البيانات في الذاكرة
 const afkUsers = new Map();
 const logChannels = new Map();
 const ticketData = new Map();         
@@ -57,7 +56,6 @@ const applicationsData = new Map();
 const customShortcuts = new Map();    
 const commandRoles = new Map();        
 
-// تسجيل كافة الأوامر (بما فيها أمر /help)
 const commands = [
   new SlashCommandBuilder()
     .setName('admin-setup')
@@ -153,7 +151,6 @@ const commands = [
 
   new SlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
 
-  // أمر المساعدة الجديد
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('يعرض لك قائمة بجميع أوامر البوت ووظائفها')
@@ -181,13 +178,11 @@ async function sendLog(guild, logType, title, color, fields) {
   await channel.send({ embeds: [logEmbed] }).catch(() => {});
 }
 
-// معالجة التفاعلات
 client.on('interactionCreate', async interaction => {
 
   if (interaction.isChatInputCommand()) {
     const { commandName, options, guild, member, channel } = interaction;
 
-    // تفاعل وشرح أمر /help
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
         .setColor(0x00FF99)
@@ -456,7 +451,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // قوائم الاختيار
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId === 'select_admin_command') {
       const selectedCmd = interaction.values[0];
@@ -504,7 +498,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // الأزرار
   if (interaction.isButton()) {
     const id = interaction.customId;
 
@@ -599,6 +592,29 @@ client.on('interactionCreate', async interaction => {
       return await interaction.showModal(modal);
     }
 
+    // [تحديث أزرار داخل التذكرة لتطابق الصورة المطلوبة: إضافة شخص أخضر والباقي أحمر]
+    if (id === 'ticket_control_menu') {
+      const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('t_come').setLabel('Come').setEmoji('📣').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('t_add').setLabel('Add').setEmoji('👤').setStyle(ButtonStyle.Success), // زر إضافة شخص باللون الأخضر
+        new ButtonBuilder().setCustomId('t_remove').setLabel('Remove').setEmoji('👤').setStyle(ButtonStyle.Danger)
+      );
+      const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('t_rename').setLabel('Rename').setEmoji('📝').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('t_rating').setLabel('Rating').setEmoji('⭐').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('t_close').setLabel('Close').setEmoji('🔒').setStyle(ButtonStyle.Danger)
+      );
+      const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('t_unclaim').setLabel('Unclaim').setEmoji('❌').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('t_restart').setLabel('Restart').setEmoji('🔄').setStyle(ButtonStyle.Danger)
+      );
+      return interaction.reply({ content: '🎛️ **خيارات التكت (مطابق للطلب - إضافة شخص أخضر والباقي أحمر):**', components: [row1, row2, row3], ephemeral: true });
+    }
+
+    if (id === 'close_ticket') {
+      await interaction.channel.delete().catch(() => {});
+    }
+
     if (id.startsWith('app_cfg_')) {
       const appNum = id.replace('app_cfg_', '');
       const embed = new EmbedBuilder().setTitle(`⚙️ إعدادات التقديم رقم (${appNum})`).setDescription(`اضغط على **تعديل الإعدادات والأسئلة** لتحديد الاسم والأسئلة:`).setColor(0x9B59B6);
@@ -660,7 +676,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // النوافذ المنبثقة
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'save_ticket_panel') {
       const title = interaction.fields.getTextInputValue('tk_title');
@@ -735,14 +750,17 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x5865F2)
         .setTimestamp();
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق التذكرة').setStyle(ButtonStyle.Danger).setEmoji('🗑️')
+      // أزرار التحكم داخل التذكرة (زر استلام، طلب الدعم، وغلق التذكرة تماماً مثل صورتك الثانية)
+      const controlBtnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('ticket_control_menu').setLabel('طلب الدعم').setEmoji('👤').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('claim_ticket').setLabel('استلام').setEmoji('🟢').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق').setEmoji('🗑️').setStyle(ButtonStyle.Secondary)
       );
 
       await ticketChannel.send({
         content: `${user} ${data.supportRoleId ? `<@&${data.supportRoleId}>` : ''}`, 
         embeds: [ticketEmbed],
-        components: [row]
+        components: [controlBtnRow]
       });
 
       return interaction.reply({ content: `✅ **تم إنشاء تذكرتك بنجاح في القناة:** ${ticketChannel}`, ephemeral: true });
@@ -782,7 +800,6 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// معالجة الشات والاختصارات والـ AFK
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
@@ -834,20 +851,17 @@ client.on('messageCreate', async message => {
   }
 });
 
-// ==========================================
-// 3. تسجيل الأوامر في ديسكورد وتشغيل البوت
-// ==========================================
 const TOKEN = process.env.TOKEN;
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
   try {
-    console.log('🔄 جاري تسجيل وتثبيت كافة الأوامر والميزات (بما فيها /help)...');
+    console.log('🔄 جاري تسجيل وتثبيت كافة الأوامر والميزات...');
     await rest.put(
       Routes.applicationCommands(client.user?.id || process.env.CLIENT_ID || '1550180675871703080'), 
       { body: commands }
     );
-    console.log('✅ تم تسجيل النظام المطور بنجاح وجاهز للعمل بدون أي مشاكل!');
+    console.log('✅ تم تسجيل النظام بنجاح!');
   } catch (err) {
     console.error('❌ خطأ أثناء تسجيل الأوامر:', err);
   }
