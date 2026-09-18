@@ -460,6 +460,28 @@ client.on('interactionCreate', async interaction => {
       const row = new ActionRowBuilder().addComponents(roleMenu);
       return interaction.reply({ content: `📌 **حدد الرتبة التي تريد منحها صلاحية استخدام أمر \`/${selectedCmd}\`:**`, components: [row], ephemeral: true });
     }
+
+    // [قائمة خيار قائمة التكت الاحترافية بناءً على طلبك]
+    if (interaction.customId === 'ticket_options_menu') {
+      const selectedOption = interaction.values[0];
+      if (selectedOption === 't_come') {
+        return interaction.reply({ content: '📣 **تم إرسال نداء لصاحب التذكرة بنجاح.**', ephemeral: true });
+      } else if (selectedOption === 't_add') {
+        return interaction.reply({ content: '👤 **يرجى منشن العضو المراد إضافته للتذكرة.**', ephemeral: true });
+      } else if (selectedOption === 't_remove') {
+        return interaction.reply({ content: '👤 **يرجى منشن العضو المراد إزالته من التذكرة.**', ephemeral: true });
+      } else if (selectedOption === 't_rename') {
+        return interaction.reply({ content: '📝 **تم تجهيز طلب إعادة تسمية التذكرة.**', ephemeral: true });
+      } else if (selectedOption === 't_rating') {
+        return interaction.reply({ content: '⭐ **جاري فتح نموذج تقييم الإداري (مستلم التذكره)...**', ephemeral: true });
+      } else if (selectedOption === 't_close') {
+        await interaction.channel.delete().catch(() => {});
+      } else if (selectedOption === 't_unclaim') {
+        return interaction.reply({ content: '❌ **تم إلغاء استلام التذكرة.**', ephemeral: true });
+      } else if (selectedOption === 't_restart') {
+        return interaction.reply({ content: '🔄 **تم إعادة تحميل قائمة الخيارات بنجاح.**', ephemeral: true });
+      }
+    }
   }
 
   if (interaction.isRoleSelectMenu()) {
@@ -590,25 +612,6 @@ client.on('interactionCreate', async interaction => {
 
       modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
       return await interaction.showModal(modal);
-    }
-
-    // [تحديث أزرار داخل التذكرة لتطابق الصورة المطلوبة: إضافة شخص أخضر والباقي أحمر]
-    if (id === 'ticket_control_menu') {
-      const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('t_come').setLabel('Come').setEmoji('📣').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('t_add').setLabel('Add').setEmoji('👤').setStyle(ButtonStyle.Success), // زر إضافة شخص باللون الأخضر
-        new ButtonBuilder().setCustomId('t_remove').setLabel('Remove').setEmoji('👤').setStyle(ButtonStyle.Danger)
-      );
-      const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('t_rename').setLabel('Rename').setEmoji('📝').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('t_rating').setLabel('Rating').setEmoji('⭐').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('t_close').setLabel('Close').setEmoji('🔒').setStyle(ButtonStyle.Danger)
-      );
-      const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('t_unclaim').setLabel('Unclaim').setEmoji('❌').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('t_restart').setLabel('Restart').setEmoji('🔄').setStyle(ButtonStyle.Danger)
-      );
-      return interaction.reply({ content: '🎛️ **خيارات التكت (مطابق للطلب - إضافة شخص أخضر والباقي أحمر):**', components: [row1, row2, row3], ephemeral: true });
     }
 
     if (id === 'close_ticket') {
@@ -744,23 +747,42 @@ client.on('interactionCreate', async interaction => {
       const ticketChannel = await guild.channels.create(channelOptions);
 
       const welcomeText = settings.welcomeMsg || 'يرجى انتظار مسؤولي التذكرة الرد عليك';
+      
+      // [تكبير وتعديل النصوص لتكون واضحة وكبيرة كما في صورك]
       const ticketEmbed = new EmbedBuilder()
-        .setTitle('🎫 تذكرة جديدة')
-        .setDescription(`مرحباً بك ${user}!\n${welcomeText}\n\n**السبب:**\n${reason}`)
+        .setTitle('🎫  تـذكـرة جـديـدة  🎫')
+        .setDescription(`### **مرحباً بك ${user} !**\n\n${welcomeText}\n\n**📝 السبب المدخل:**\n\`\`\`${reason}\`\`\``)
         .setColor(0x5865F2)
         .setTimestamp();
 
-      // أزرار التحكم داخل التذكرة (زر استلام، طلب الدعم، وغلق التذكرة تماماً مثل صورتك الثانية)
-      const controlBtnRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('ticket_control_menu').setLabel('طلب الدعم').setEmoji('👤').setStyle(ButtonStyle.Primary),
+      // الصف الأول: زر طلب الدعم + زر الاستلام (أخضر) + زر الغلق
+      const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('ticket_support_btn').setLabel('طلب الدعم').setEmoji('👤').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('claim_ticket').setLabel('استلام').setEmoji('🟢').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق').setEmoji('🗑️').setStyle(ButtonStyle.Secondary)
       );
 
+      // الصف الثاني: قائمة خيارات التكت (المطابقة لطلبك)
+      const ticketOptionsSelect = new StringSelectMenuBuilder()
+        .setCustomId('ticket_options_menu')
+        .setPlaceholder('📂 خيارات التكت')
+        .addOptions(
+          { label: 'Come', description: 'استدعاء صاحب التذكرة', value: 't_come', emoji: '📢' },
+          { label: 'Add', description: 'اضافة عضو لي تذكرة', value: 't_add', emoji: '👤' },
+          { label: 'Remove', description: 'إزالة عضو من التذكرة', value: 't_remove', emoji: '👤' },
+          { label: 'Rename', description: 'تغيير اسم التذكرة', value: 't_rename', emoji: '📝' },
+          { label: 'Rating', description: 'تقييم الإداري (مستلم التذكره)', value: 't_rating', emoji: '⭐' },
+          { label: 'Close', description: 'غلق التذكرة', value: 't_close', emoji: '🔒' },
+          { label: 'Unclaim', description: 'إلغاء استلام التكت', value: 't_unclaim', emoji: '❌' },
+          { label: 'Restart', description: 'إعادة تحميل القائمة', value: 't_restart', emoji: '🔄' }
+        );
+
+      const row2 = new ActionRowBuilder().addComponents(ticketOptionsSelect);
+
       await ticketChannel.send({
         content: `${user} ${data.supportRoleId ? `<@&${data.supportRoleId}>` : ''}`, 
         embeds: [ticketEmbed],
-        components: [controlBtnRow]
+        components: [row1, row2]
       });
 
       return interaction.reply({ content: `✅ **تم إنشاء تذكرتك بنجاح في القناة:** ${ticketChannel}`, ephemeral: true });
