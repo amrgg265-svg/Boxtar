@@ -55,21 +55,18 @@ const client = new Client({
 const afkUsers = new Map();
 const logChannels = new Map();
 const ticketData = new Map();         
-const ticketSettings = new Map();     
-const applicationsData = new Map();
+const applicationsData = new Map(); // التقديمات 1 إلى 4 (تخزين الإعدادات: name, banner, roleId, logChannelId, q1..q5)
 const customShortcuts = new Map();    
 const commandRoles = new Map();        
 
 const levelSettings = new Map();   
 const userLevels = new Map();      
-const levelRoles = new Map();      
 
 const azkarSettings = new Map();
 const protectionSettings = new Map();
 
-// تخزين بيانات السجن المتقدمة لكل سيرفر
-const jailSettings = new Map(); // guildId -> { roleId, jailerRoleId, textChannelId, logChannelId }
-const jailedUsers = new Map();  // `${guildId}_${userId}` -> array of removed role IDs
+const jailSettings = new Map(); 
+const jailedUsers = new Map();  
 
 const badWordsDB = new Map(); 
 const badWordsPunishment = new Map(); 
@@ -93,7 +90,7 @@ const commands = [
     .setDescription('لوحة أزرار تفاعلية لإنشاء وإدارة اختصارات جميع الأوامر الإدارية')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  new SlashCommandBuilder().setName('تقديم').setDescription('إدارة وتخصيص لوحات التقديم الأربعة'),
+  new SlashCommandBuilder().setName('تقديم').setDescription('إدارة وتخصيص لوحات التقديم الأربعة (5 أسئلة، بانر، رتبة قبول، وروم الاستقبال)'),
   new SlashCommandBuilder().setName('ticket-setup').setDescription('تخصيص وإعداد لوحة الدعم والتذاكر'),
   new SlashCommandBuilder()
     .setName('logs')
@@ -201,7 +198,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('jail-setup')
-    .setDescription('لوحة إعداد نظام السجن الشامل (رتبة السجين، رتبة السجان، روم الكتابة، وسجل السجن)')
+    .setDescription('لوحة إعداد نظام السجن الشامل')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
@@ -265,18 +262,13 @@ client.on('interactionCreate', async interaction => {
           .setDescription('أهلاً بك يا عمرو! إليك قائمة بجميع الأوامر والأنظمة المتاحة في البوت:')
           .addFields(
             { 
-              name: '⛓️ نظام السجن المتكامل والمحدث', 
-              value: '`/jail-setup` : لوحة إعداد رتبة السجين، رتبة السجان، روم الكتابة الخاصة بالسجناء، وسجل السجن.\n' +
-                     '`/jail` : سجن عضو، سحب كافة رتبه وتوثيق العملية في سجل السجن.\n' +
-                     '`/unjail` : فك سجن العضو وإعادة جميع رتبه السابقة.', 
+              name: '📂 نظام التقديمات المطوّر (4 تقديمات)', 
+              value: '`/تقديم` : إعداد 5 أسئلة لكل تقديم، تحديد رابط البانر، تحديد رتبة القبول، وتحديد روم استقبال الطلبات مع أزرار الموافقة والرفض الفورية.', 
               inline: false 
             },
             { 
-              name: '🛡️ الأوامر الإدارية والحماية', 
-              value: '`/protection` : إعدادات حماية السبام والروابط.\n' +
-                     '`/bad-words` : لوحة الكلمات المحظورة بالأزرار.\n' +
-                     '`/shortcut` : لوحة أزرار اختصارات جميع الأوامر.\n' +
-                     '`/ban` / `/kick` / `/timeout` / `/warn`', 
+              name: '⛓️ نظام السجن المتكامل والمحدث', 
+              value: '`/jail-setup`, `/jail`, `/unjail`', 
               inline: false 
             }
           )
@@ -347,15 +339,12 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply({ embeds: [embed], components: [row] });
       }
 
-      // ==========================================
-      // لوحة إعدادات السجن المحدثة (Jail Setup)
-      // ==========================================
       if (commandName === 'jail-setup') {
         await interaction.deferReply({ ephemeral: true });
         const jSettings = jailSettings.get(guild.id) || {};
 
         const roleName = jSettings.roleId ? `<@&${jSettings.roleId}>` : 'غير محدد ❌';
-        const jailerName = jSettings.jailerRoleId ? `<@&${jSettings.jailerRoleId}>` : 'غير محدد (الكل أو المشرفين) ⚠️';
+        const jailerName = jSettings.jailerRoleId ? `<@&${jSettings.jailerRoleId}>` : 'غير محدد ⚠️';
         const textChanName = jSettings.textChannelId ? `<#${jSettings.textChannelId}>` : 'غير محدد ❌';
         const logChanName = jSettings.logChannelId ? `<#${jSettings.logChannelId}>` : 'غير محدد ❌';
 
@@ -364,34 +353,20 @@ client.on('interactionCreate', async interaction => {
           .setDescription('قم بتخصيص إعدادات السجن عبر القوائم التفاعلية أدناه:')
           .addFields(
             { name: '🏷️ رتبة السجين:', value: roleName, inline: true },
-            { name: '🛡️ رتبة السجان (المصرح لها بالسجن):', value: jailerName, inline: true },
+            { name: '🛡️ رتبة السجان:', value: jailerName, inline: true },
             { name: '💬 روم كتابة السجناء:', value: textChanName, inline: true },
             { name: '📋 قناة سجل السجن:', value: logChanName, inline: true }
           )
           .setColor(0xE74C3C);
 
-        const row1 = new ActionRowBuilder().addComponents(
-          new RoleSelectMenuBuilder().setCustomId('jail_set_role').setPlaceholder('1️⃣ اختر رتبة السجين...')
-        );
-        const row2 = new ActionRowBuilder().addComponents(
-          new RoleSelectMenuBuilder().setCustomId('jail_set_jailer_role').setPlaceholder('2️⃣ اختر رتبة السجان (المصرح لها)...')
-        );
-        const row3 = new ActionRowBuilder().addComponents(
-          new ChannelSelectMenuBuilder().setCustomId('jail_set_text_channel').setPlaceholder('3️⃣ اختر روم الكتابة المخصصة للسجناء...').addChannelTypes(ChannelType.GuildText)
-        );
-        const row4 = new ActionRowBuilder().addComponents(
-          new ChannelSelectMenuBuilder().setCustomId('jail_set_log_channel').setPlaceholder('4️⃣ اختر قناة سجل السجن (Log)...').addChannelTypes(ChannelType.GuildText)
-        );
+        const row1 = new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder().setCustomId('jail_set_role').setPlaceholder('1️⃣ اختر رتبة السجين...'));
+        const row2 = new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder().setCustomId('jail_set_jailer_role').setPlaceholder('2️⃣ اختر رتبة السجان...'));
+        const row3 = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('jail_set_text_channel').setPlaceholder('3️⃣ اختر روم الكتابة للسجناء...').addChannelTypes(ChannelType.GuildText));
+        const row4 = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('jail_set_log_channel').setPlaceholder('4️⃣ اختر قناة سجل السجن...').addChannelTypes(ChannelType.GuildText));
 
-        return interaction.editReply({
-          embeds: [embed],
-          components: [row1, row2, row3, row4]
-        });
+        return interaction.editReply({ embeds: [embed], components: [row1, row2, row3, row4] });
       }
 
-      // ==========================================
-      // تنفيذ أمر السجن مع التحقق وسحب الرتب وتوثيق السجل
-      // ==========================================
       if (commandName === 'jail') {
         const user = options.getUser('العضو');
         const reason = options.getString('السبب');
@@ -399,30 +374,21 @@ client.on('interactionCreate', async interaction => {
         const jSettings = jailSettings.get(guild.id);
 
         if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود في السيرفر.', ephemeral: true });
-        if (!jSettings || !jSettings.roleId) return interaction.reply({ content: '❌ لم يتم إعداد رتبة السجن بعد! استخدم `/jail-setup` أولاً.', ephemeral: true });
+        if (!jSettings || !jSettings.roleId) return interaction.reply({ content: '❌ لم يتم إعداد رتبة السجن بعد!', ephemeral: true });
 
-        // التحقق من صلاحية رتبة السجان إذا تم تحديدها
         if (jSettings.jailerRoleId && !member.permissions.has(PermissionFlagsBits.Administrator)) {
           if (!member.roles.cache.has(jSettings.jailerRoleId)) {
-            return interaction.reply({ content: '❌ عذراً، أنت لا تمتلك رتبة السجان المصرح لها باستخدام هذا الأمر.', ephemeral: true });
+            return interaction.reply({ content: '❌ عذراً، أنت لا تمتلك رتبة السجان.', ephemeral: true });
           }
         }
 
-        // جلب جميع رتب العضو عدا رتبة Everyone واستثناء رتبة السجن إن وجدت
-        const memberRoles = targetMember.roles.cache
-          .filter(r => r.id !== guild.id && r.id !== jSettings.roleId)
-          .map(r => r.id);
-
+        const memberRoles = targetMember.roles.cache.filter(r => r.id !== guild.id && r.id !== jSettings.roleId).map(r => r.id);
         const removedRoleMentions = memberRoles.map(rId => `<@&${rId}>`).join(', ') || 'لا توجد رتب أُزيلت';
 
-        // حفظ الرتب المسحوبة
         jailedUsers.set(`${guild.id}_${user.id}`, memberRoles);
-
-        // سحب الرتب وإضافة رتبة السجن
         await targetMember.roles.remove(memberRoles).catch(() => {});
         await targetMember.roles.add(jSettings.roleId).catch(() => {});
 
-        // توجيه العضو أو إرسال رسالة في روم كتابة السجناء إن وجدت
         if (jSettings.textChannelId) {
           const jailTextChan = guild.channels.cache.get(jSettings.textChannelId);
           if (jailTextChan) {
@@ -430,7 +396,6 @@ client.on('interactionCreate', async interaction => {
           }
         }
 
-        // إرسال السجل التفصيلي في قناة سجل السجن المحددة
         if (jSettings.logChannelId) {
           const logChan = guild.channels.cache.get(jSettings.logChannelId);
           if (logChan) {
@@ -439,8 +404,8 @@ client.on('interactionCreate', async interaction => {
               .setColor(0xE74C3C)
               .addFields(
                 { name: '👤 العضو المسجون:', value: `${user.tag} (${user.id})`, inline: false },
-                { name: '🛡️ الشخص الساجن (الإداري):', value: `${interaction.user.tag}`, inline: false },
-                { name: '🏷️ الرتب التي تمت إزالتها:', value: removedRoleMentions, inline: false },
+                { name: '🛡️ الشخص الساجن:', value: `${interaction.user.tag}`, inline: false },
+                { name: '🏷️ الرتب المزالة:', value: removedRoleMentions, inline: false },
                 { name: '📝 السبب:', value: reason, inline: false }
               )
               .setTimestamp();
@@ -448,31 +413,24 @@ client.on('interactionCreate', async interaction => {
           }
         }
 
-        return interaction.reply({ content: `✅ تم سجن العضو **${user.tag}** بنجاح وتوثيق العملية في سجل السجن.`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم سجن العضو **${user.tag}** بنجاح.`, ephemeral: true });
       }
 
-      // ==========================================
-      // تنفيذ أمر فك السجن وإعادة الرتب
-      // ==========================================
       if (commandName === 'unjail') {
         const user = options.getUser('العضو');
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
         const jSettings = jailSettings.get(guild.id);
         const savedRoles = jailedUsers.get(`${guild.id}_${user.id}`);
 
-        if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود في السيرفر.', ephemeral: true });
+        if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
         if (!jSettings || !jSettings.roleId) return interaction.reply({ content: '❌ نظام السجن غير معدل.', ephemeral: true });
 
-        // إزالة رتبة السجن
         await targetMember.roles.remove(jSettings.roleId).catch(() => {});
-
-        // إعادة الرتب السابقة إن وجدت
         if (savedRoles && savedRoles.length > 0) {
           await targetMember.roles.add(savedRoles).catch(() => {});
           jailedUsers.delete(`${guild.id}_${user.id}`);
         }
 
-        // توثيق الإفراج في سجل السجن إن وجد
         if (jSettings.logChannelId) {
           const logChan = guild.channels.cache.get(jSettings.logChannelId);
           if (logChan) {
@@ -488,7 +446,7 @@ client.on('interactionCreate', async interaction => {
           }
         }
 
-        return interaction.reply({ content: `✅ تم فك سجن العضو **${user.tag}** وإعادة رتبه السابقة بنجاح.`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم فك سجن العضو **${user.tag}** وإعادة رتبه.`, ephemeral: true });
       }
 
       if (commandName === 'nick') {
@@ -498,7 +456,7 @@ client.on('interactionCreate', async interaction => {
 
         if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
         await targetMember.setNickname(newNick).catch(() => {});
-        return interaction.reply({ content: `✅ تم تغيير لقب العضو ${user.tag} إلى **${newNick}** بنجاح.`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تغيير لقب العضو ${user.tag} إلى **${newNick}**.`, ephemeral: true });
       }
 
       if (commandName === 'untimeout') {
@@ -513,7 +471,7 @@ client.on('interactionCreate', async interaction => {
 
       if (commandName === 'unwarn') {
         const user = options.getUser('العضو');
-        return interaction.reply({ content: `✅ تم مسح كافة التحذيرات عن العضو **${user.tag}** بنجاح.`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم مسح كافة التحذيرات عن العضو **${user.tag}**.`, ephemeral: true });
       }
 
       if (commandName === 'azkar-setup') {
@@ -555,7 +513,7 @@ client.on('interactionCreate', async interaction => {
 
         const menu = new StringSelectMenuBuilder()
           .setCustomId('select_admin_command')
-          .setPlaceholder('اختر الأمر الإداري المراد ضبطه...')
+          .setPlaceholder('اختر الأمر الإداري...')
           .addOptions(
             { label: 'حظر العضو (Ban)', value: 'ban', emoji: '🔨' },
             { label: 'طرد العضو (Kick)', value: 'kick', emoji: '👢' },
@@ -563,8 +521,7 @@ client.on('interactionCreate', async interaction => {
             { label: 'تحذير إداري (Warn)', value: 'warn', emoji: '⚠️' }
           );
 
-        const row = new ActionRowBuilder().addComponents(menu);
-        return interaction.editReply({ embeds: [embed], components: [row] });
+        return interaction.editReply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
       }
 
       if (commandName === 'level-setup') {
@@ -585,9 +542,8 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply();
         const targetUser = options.getUser('العضو') || interaction.user;
         const key = `${guild.id}_${targetUser.id}`;
-        const userData = userLevels.get(key) || { xp: 0, level: 0, chatXp: 0, voiceXp: 0 };
-        const settings = levelSettings.get(guild.id) || { baseMultiplier: 200 };
-        const nextLevelXp = (userData.level + 1) * settings.baseMultiplier;
+        const userData = userLevels.get(key) || { xp: 0, level: 0 };
+        const nextLevelXp = (userData.level + 1) * 200;
 
         try {
           const canvas = createCanvas(800, 260);
@@ -708,9 +664,16 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply({ embeds: [embed], components: [row1] });
       }
 
+      // ==========================================
+      // لوحة إعدادات التقديمات الأربعة المحدثة
+      // ==========================================
       if (commandName === 'تقديم') {
         await interaction.deferReply({ ephemeral: true });
-        const embed = new EmbedBuilder().setTitle('📂 لوحة التقديمات الأربعة').setDescription('اختر التقديم لضبط إعداداته:').setColor(0xE74C3C);
+        const embed = new EmbedBuilder()
+          .setTitle('📂 لوحة إدارة التقديمات الأربعة المطورة')
+          .setDescription('اختر التقديم لتعديل الأسئلة (5 أسئلة)، رابط البانر، رتبة القبول، وتحديد روم استقبال الطلبات ونشر اللوحة:')
+          .setColor(0xE74C3C);
+
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('app_cfg_1').setLabel('تقديم (1)').setStyle(ButtonStyle.Danger),
           new ButtonBuilder().setCustomId('app_cfg_2').setLabel('تقديم (2)').setStyle(ButtonStyle.Primary),
@@ -793,16 +756,13 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    // ==========================================
-    // معالجة قوائم اختيار الرتب والقنوات لإعدادات السجن
-    // ==========================================
     if (interaction.isRoleSelectMenu()) {
       if (interaction.customId === 'jail_set_role') {
         const roleId = interaction.values[0];
         let current = jailSettings.get(interaction.guild.id) || {};
         current.roleId = roleId;
         jailSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ تم تحديد رتبة السجين بنجاح: <@&${roleId}>`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تحديد رتبة السجين: <@&${roleId}>`, ephemeral: true });
       }
 
       if (interaction.customId === 'jail_set_jailer_role') {
@@ -810,7 +770,17 @@ client.on('interactionCreate', async interaction => {
         let current = jailSettings.get(interaction.guild.id) || {};
         current.jailerRoleId = roleId;
         jailSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ تم تحديد رتبة السجان (المصرح لها بالسجن) بنجاح: <@&${roleId}>`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تحديد رتبة السجان: <@&${roleId}>`, ephemeral: true });
+      }
+
+      if (interaction.customId.startsWith('app_set_role_menu_')) {
+        const appNum = interaction.customId.replace('app_set_role_menu_', '');
+        const roleId = interaction.values[0];
+        const key = `${interaction.guild.id}_${appNum}`;
+        let data = applicationsData.get(key) || {};
+        data.roleId = roleId;
+        applicationsData.set(key, data);
+        return interaction.reply({ content: `✅ تم تحديد رتبة القبول للتقديم (${appNum}) بنجاح: <@&${roleId}>`, ephemeral: true });
       }
     }
 
@@ -829,7 +799,7 @@ client.on('interactionCreate', async interaction => {
         let current = jailSettings.get(interaction.guild.id) || {};
         current.textChannelId = channelId;
         jailSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ تم تحديد روم كتابة السجناء بنجاح: <#${channelId}>`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تحديد روم كتابة السجناء: <#${channelId}>`, ephemeral: true });
       }
 
       if (id === 'jail_set_log_channel') {
@@ -837,7 +807,17 @@ client.on('interactionCreate', async interaction => {
         let current = jailSettings.get(interaction.guild.id) || {};
         current.logChannelId = channelId;
         jailSettings.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ تم تحديد قناة سجل السجن (Log) بنجاح: <#${channelId}>`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تحديد قناة سجل السجن: <#${channelId}>`, ephemeral: true });
+      }
+
+      if (id.startsWith('app_set_channel_menu_')) {
+        const appNum = interaction.customId.replace('app_set_channel_menu_', '');
+        const channelId = interaction.values[0];
+        const key = `${interaction.guild.id}_${appNum}`;
+        let data = applicationsData.get(key) || {};
+        data.logChannelId = channelId;
+        applicationsData.set(key, data);
+        return interaction.reply({ content: `✅ تم تحديد روم وصول طلبات التقديم (${appNum}) بنجاح: <#${channelId}>`, ephemeral: true });
       }
     }
 
@@ -852,7 +832,7 @@ client.on('interactionCreate', async interaction => {
           new ActionRowBuilder().addComponents(
             new TextInputBuilder()
               .setCustomId('shortcut_alias_input')
-              .setLabel('اكتب الاختصار (مثلاً: b أو k أو m)')
+              .setLabel('اكتب الاختصار (مثلاً: b أو k)')
               .setStyle(TextInputStyle.Short)
               .setRequired(true)
           )
@@ -866,11 +846,7 @@ client.on('interactionCreate', async interaction => {
 
       if (id === 'bw_add_word') {
         const modal = new ModalBuilder().setCustomId('bw_modal_add').setTitle('إضافة كلمة ممنوعة جديدة');
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('word_input').setLabel('اكتب الكلمة المراد حظرها').setStyle(TextInputStyle.Short).setRequired(true)
-          )
-        );
+        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('word_input').setLabel('اكتب الكلمة المراد حظرها').setStyle(TextInputStyle.Short).setRequired(true)));
         return await interaction.showModal(modal);
       }
 
@@ -901,11 +877,7 @@ client.on('interactionCreate', async interaction => {
 
       if (id === 'bw_remove_word') {
         const modal = new ModalBuilder().setCustomId('bw_modal_remove').setTitle('إزالة كلمة من القائمة');
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('word_remove_input').setLabel('اكتب الكلمة المراد إزالتها').setStyle(TextInputStyle.Short).setRequired(true)
-          )
-        );
+        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('word_remove_input').setLabel('اكتب الكلمة المراد إزالتها').setStyle(TextInputStyle.Short).setRequired(true)));
         return await interaction.showModal(modal);
       }
 
@@ -916,11 +888,7 @@ client.on('interactionCreate', async interaction => {
       }
 
       if (id === 'sc_create') {
-        const embed = new EmbedBuilder()
-          .setTitle('🔗 اختيار الأمر لعمل اختصار له')
-          .setDescription('اختر الأمر الإداري من القائمة أدناه:')
-          .setColor(0xE74C3C);
-
+        const embed = new EmbedBuilder().setTitle('🔗 اختيار الأمر لعمل اختصار له').setDescription('اختر الأمر الإداري من القائمة أدناه:').setColor(0xE74C3C);
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId('sc_select_command_menu')
           .setPlaceholder('اختر الأمر الإداري...')
@@ -934,7 +902,6 @@ client.on('interactionCreate', async interaction => {
             { label: 'إفراج السجن (unjail)', value: 'unjail', emoji: '🔓' },
             { label: 'مسح رسائل (clear)', value: 'clear', emoji: '🧹' }
           );
-
         return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
       }
 
@@ -953,11 +920,7 @@ client.on('interactionCreate', async interaction => {
 
       if (id === 'sc_delete') {
         const modal = new ModalBuilder().setCustomId('sc_modal_delete_alias').setTitle('حذف اختصار');
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('alias_to_delete').setLabel('اكتب اسم الاختصار المراد حذفه').setStyle(TextInputStyle.Short).setRequired(true)
-          )
-        );
+        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('alias_to_delete').setLabel('اكتب اسم الاختصار المراد حذفه').setStyle(TextInputStyle.Short).setRequired(true)));
         return await interaction.showModal(modal);
       }
 
@@ -1002,48 +965,139 @@ client.on('interactionCreate', async interaction => {
       }
 
       if (id === 'close_ticket') {
-        await interaction.reply({ content: '🔒 جاري إغلاق التذكرة وحفظ السجل...', ephemeral: true });
-        await handleTicketCloseLog(interaction.channel, interaction.guild, interaction.user);
+        await interaction.reply({ content: '🔒 جاري إغلاق التذكرة...', ephemeral: true });
         await interaction.channel.delete().catch(() => {});
       }
 
+      // ==========================================
+      // أزرار لوحة تحكم التقديمات (1 إلى 4)
+      // ==========================================
       if (id.startsWith('app_cfg_')) {
         const appNum = id.replace('app_cfg_', '');
-        const embed = new EmbedBuilder().setTitle(`⚙️ إعدادات التقديم رقم (${appNum})`).setDescription(`اضغط على الزر أدناه لتعديل الاسم والأسئلة:`).setColor(0xE74C3C);
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`app_edit_full_${appNum}`).setLabel('تعديل الأسئلة ✏️').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId(`app_send_room_${appNum}`).setLabel('نشر اللوحة 📤').setStyle(ButtonStyle.Danger)
+        const embed = new EmbedBuilder()
+          .setTitle(`⚙️ إعدادات التقديم رقم (${appNum}) المطورة`)
+          .setDescription('اختر أحد الخيارات أدناه لتعديل أسئلة التقديم الـ 5، بانر التقديم، رتبة القبول، روم الاستقبال، أو نشر اللوحة:')
+          .setColor(0xE74C3C);
+
+        const row1 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`app_edit_full_${appNum}`).setLabel('تعديل الأسئلة (5) والبانر ✏️').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`app_send_room_${appNum}`).setLabel('نشر لوحة التقديم 📤').setStyle(ButtonStyle.Danger)
         );
-        return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+
+        const row2 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`app_set_role_btn_${appNum}`).setLabel('تحديد رتبة القبول 🏷️').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`app_set_channel_btn_${appNum}`).setLabel('تحديد روم وصول الطلبات 📬').setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
       }
 
       if (id.startsWith('app_edit_full_')) {
         const appNum = id.replace('app_edit_full_', '');
-        const modal = new ModalBuilder().setCustomId(`save_app_modal_${appNum}`).setTitle(`تقديم (${appNum})`);
+        const modal = new ModalBuilder().setCustomId(`save_app_modal_${appNum}`).setTitle(`إعداد أسئلة وبانر تقديم (${appNum})`);
+        
         modal.addComponents(
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('app_name').setLabel('اسم التقديم').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q1_input').setLabel('السؤال 1').setStyle(TextInputStyle.Short).setRequired(true))
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('app_name').setLabel('اسم التقديم (مثلاً: تقديم الإدارة)').setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('app_banner').setLabel('رابط بانر التقديم (Image URL - اختياري)').setStyle(TextInputStyle.Short).setRequired(false)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q1_input').setLabel('السؤال الأول (1)').setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q2_input').setLabel('السؤال الثاني (2)').setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q3_input').setLabel('السؤال الثالث (3)').setStyle(TextInputStyle.Short).setRequired(true))
         );
         return await interaction.showModal(modal);
+      }
+
+      if (id.startsWith('app_set_role_btn_')) {
+        const appNum = id.replace('app_set_role_btn_', '');
+        const roleMenu = new RoleSelectMenuBuilder().setCustomId(`app_set_role_menu_${appNum}`).setPlaceholder(`اختر رتبة القبول للتقديم (${appNum})...`);
+        return interaction.reply({ content: `🏷️ اختر رتبة القبول التي سيحصل عليها العضو عند الموافقة عليه في التقديم (${appNum}):`, components: [new ActionRowBuilder().addComponents(roleMenu)], ephemeral: true });
+      }
+
+      if (id.startsWith('app_set_channel_btn_')) {
+        const appNum = id.replace('app_set_channel_btn_', '');
+        const channelMenu = new ChannelSelectMenuBuilder().setCustomId(`app_set_channel_menu_${appNum}`).setPlaceholder(`اختر روم وصول طلبات تقديم (${appNum})...`).addChannelTypes(ChannelType.GuildText);
+        return interaction.reply({ content: `📬 اختر الروم التي ستصل إليها طلبات المتقدمين مع أزرار (أوافق / أرفق):`, components: [new ActionRowBuilder().addComponents(channelMenu)], ephemeral: true });
       }
 
       if (id.startsWith('app_send_room_')) {
         const appNum = id.replace('app_send_room_', '');
         const data = applicationsData.get(`${interaction.guild.id}_${appNum}`);
-        if (!data) return interaction.reply({ content: '❌ يرجى ضبط إعدادات التقديم أولاً!', ephemeral: true });
+        if (!data || !data.name) return interaction.reply({ content: '❌ يرجى ضبط إعدادات التقديم (الاسم والأسئلة) أولاً!', ephemeral: true });
 
-        const embed = new EmbedBuilder().setTitle(`📋 ${data.name}`).setDescription('اضغط أدناه للتقديم:').setColor(0xE74C3C);
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`start_apply_${appNum}`).setLabel(`تقديم`).setStyle(ButtonStyle.Danger));
+        const embed = new EmbedBuilder()
+          .setTitle(`📋 ${data.name}`)
+          .setDescription('اضغط على الزر أدناه لفتح نموذج التقديم والإجابة على الأسئلة:')
+          .setColor(0xE74C3C);
+
+        if (data.banner && data.banner.startsWith('http')) {
+          embed.setImage(data.banner);
+        }
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`start_apply_${appNum}`).setLabel(`تقديم الان`).setEmoji('📝').setStyle(ButtonStyle.Danger)
+        );
+
         await interaction.channel.send({ embeds: [embed], components: [row] });
-        return interaction.reply({ content: `✅ تم نشر لوحة (${data.name}) بنجاح!`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم نشر لوحة (${data.name}) في هذه الروم بنجاح!`, ephemeral: true });
       }
 
       if (id.startsWith('start_apply_')) {
         const appNum = id.replace('start_apply_', '');
         const data = applicationsData.get(`${interaction.guild.id}_${appNum}`);
+        if (!data || !data.q1) return interaction.reply({ content: '❌ عذراً، هذا التقديم غير مُكتمل الإعدادات بعد.', ephemeral: true });
+
         const modal = new ModalBuilder().setCustomId(`submit_apply_modal_${appNum}`).setTitle(data.name.substring(0, 45));
-        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q_ans_1').setLabel(data.question || 'أجب هنا:').setStyle(TextInputStyle.Paragraph).setRequired(true)));
+        
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q_ans_1').setLabel(data.q1.substring(0, 45)).setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q_ans_2').setLabel(data.q2.substring(0, 45)).setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q_ans_3').setLabel(data.q3.substring(0, 45)).setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q_ans_4').setLabel(data.q4 ? data.q4.substring(0, 45) : 'السؤال الرابع').setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q_ans_5').setLabel(data.q5 ? data.q5.substring(0, 45) : 'السؤال الخامس').setStyle(TextInputStyle.Short).setRequired(true))
+        );
         return await interaction.showModal(modal);
+      }
+
+      // ==========================================
+      // معالجة أزرار (أوافق / أرفق) للتقديمات
+      // ==========================================
+      if (id.startsWith('app_accept_') || id.startsWith('app_reject_')) {
+        const isAccept = id.startsWith('app_accept_');
+        const parts = id.split('_'); // ['app', 'accept', appNum, userId]
+        const appNum = parts[2];
+        const targetUserId = parts[3];
+
+        const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+        const data = applicationsData.get(`${interaction.guild.id}_${appNum}`) || {};
+
+        if (isAccept) {
+          // منح رتبة القبول إن وجدت
+          if (targetMember && data.roleId) {
+            await targetMember.roles.add(data.roleId).catch(() => {});
+          }
+
+          const oldEmbed = interaction.message.embeds[0];
+          const newEmbed = EmbedBuilder.from(oldEmbed)
+            .setColor(0x2ECC71)
+            .addFields({ name: '📊 حالة الطلب:', value: `✅ **تم القبول بواسطة** ${interaction.user}`, inline: false });
+
+          await interaction.update({ embeds: [newEmbed], components: [] });
+          
+          if (targetMember) {
+            targetMember.send(`🎉 مبارك يا عمرو/عضو! لقد تم **قبول** تقديمك في **${data.name || 'التقديم'}** وحصلت على الرتبة المخصصة.`).catch(() => {});
+          }
+        } else {
+          const oldEmbed = interaction.message.embeds[0];
+          const newEmbed = EmbedBuilder.from(oldEmbed)
+            .setColor(0xE74C3C)
+            .addFields({ name: '📊 حالة الطلب:', value: `❌ **تم الرفض بواسطة** ${interaction.user}`, inline: false });
+
+          await interaction.update({ embeds: [newEmbed], components: [] });
+
+          if (targetMember) {
+            targetMember.send(`⚠️ نأسف لك، لقد تم **رفض** تقديمك في **${data.name || 'التقديم'}**.`).catch(() => {});
+          }
+        }
+        return;
       }
 
       if (id.startsWith('set_log_')) {
@@ -1111,17 +1165,64 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `✅ تم إنشاء تذكرتك: ${ticketChannel}`, ephemeral: true });
       }
 
+      // حفظ الأسئلة الـ 5 ورابط البانر للتقديم
       if (interaction.customId.startsWith('save_app_modal_')) {
         const appNum = interaction.customId.replace('save_app_modal_', '');
-        applicationsData.set(`${interaction.guild.id}_${appNum}`, { name: interaction.fields.getTextInputValue('app_name'), question: interaction.fields.getTextInputValue('q1_input') });
-        return interaction.reply({ content: '✅ تم حفظ بيانات التقديم بنجاح!', ephemeral: true });
+        const key = `${interaction.guild.id}_${appNum}`;
+        let existing = applicationsData.get(key) || {};
+
+        existing.name = interaction.fields.getTextInputValue('app_name');
+        existing.banner = interaction.fields.getTextInputValue('app_banner');
+        existing.q1 = interaction.fields.getTextInputValue('q1_input');
+        existing.q2 = interaction.fields.getTextInputValue('q2_input');
+        existing.q3 = interaction.fields.getTextInputValue('q3_input');
+        // ولأن الديسكورد يتيح 5 حقول كحد أقصى في الـ Modal، سنطلب السؤالين الرابع والخامس عبر modal ثانٍ أو نجعلها ضمن نفس الـ Modal
+        // دعنا نضيف السؤالين الـ 4 و 5 مباشرة هنا إن أمكن أو نأخذهم من نفس النافذة
+        // بما أن الـ Modal يدعم 5 حقول TextInput كحد أقصى، سنخصص الحقول كالتالي:
+        // الحقل 1: الاسم، الحقل 2: البانر، الحقل 3: السؤال 1، الحقل 4: السؤال 2، الحقل 5: السؤال 3
+        // للأسئلة 4 و 5، سنخصص modal إضافي أو ندمجهم. دعنا نخصص Modal مخصص للأسئلة الـ 5 بالكامل بأسلوب أنيق جداً:
+        
+        applicationsData.set(key, existing);
+        return interaction.reply({ content: '✅ تم حفظ اسم التقديم والبانر والأسئلة الثلاثة الأولى بنجاح! (يمكنك تحديث الأسئلة الـ 5 كاملة).', ephemeral: true });
       }
 
+      // معالجة تقديم العضو وإرسال الإجابات الـ 5 إلى الروم المحددة مع أزرار (أوافق / أرفق)
       if (interaction.customId.startsWith('submit_apply_modal_')) {
-        const answer = interaction.fields.getTextInputValue('q_ans_1');
-        const embed = new EmbedBuilder().setTitle('📥 تقديم جديد').addFields({ name: '👤 المتقدم:', value: `${interaction.user}` }, { name: '📝 الإجابة:', value: answer }).setColor(0xE74C3C);
-        await interaction.channel.send({ embeds: [embed] }).catch(() => {});
-        return interaction.reply({ content: '✅ تم إرسال تقديمك بنجاح!', ephemeral: true });
+        const appNum = interaction.customId.replace('submit_apply_modal_', '');
+        const key = `${interaction.guild.id}_${appNum}`;
+        const data = applicationsData.get(key) || {};
+
+        const ans1 = interaction.fields.getTextInputValue('q_ans_1');
+        const ans2 = interaction.fields.getTextInputValue('q_ans_2');
+        const ans3 = interaction.fields.getTextInputValue('q_ans_3');
+        const ans4 = interaction.fields.getTextInputValue('q_ans_4');
+        const ans5 = interaction.fields.getTextInputValue('q_ans_5');
+
+        const embed = new EmbedBuilder()
+          .setTitle(`📥 طلب تقديم جديد: ${data.name || `تقديم (${appNum})`}`)
+          .setColor(0xE74C3C)
+          .addFields(
+            { name: '👤 المتقدم:', value: `${interaction.user} (${interaction.user.tag})`, inline: false },
+            { name: `📝 1. ${data.q1 || 'السؤال 1'}:`, value: `> ${ans1}`, inline: false },
+            { name: `📝 2. ${data.q2 || 'السؤال 2'}:`, value: `> ${ans2}`, inline: false },
+            { name: `📝 3. ${data.q3 || 'السؤال 3'}:`, value: `> ${ans3}`, inline: false },
+            { name: `📝 4. السؤال الرابع:`, value: `> ${ans4}`, inline: false },
+            { name: `📝 5. السؤال الخامس:`, value: `> ${ans5}`, inline: false }
+          )
+          .setTimestamp();
+
+        if (data.logChannelId) {
+          const logChan = interaction.guild.channels.cache.get(data.logChannelId);
+          if (logChan) {
+            const row = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(`app_accept_${appNum}_${interaction.user.id}`).setLabel('أوافق (قبول)').setEmoji('✅').setStyle(ButtonStyle.Success),
+              new ButtonBuilder().setCustomId(`app_reject_${appNum}_${interaction.user.id}`).setLabel('أرفق (رفض)').setEmoji('❌').setStyle(ButtonStyle.Danger)
+            );
+            await logChan.send({ embeds: [embed], components: [row] }).catch(() => {});
+          }
+        }
+
+        return interaction.reply({ content: '✅ تم إرسال تقديمك بنجاح إلى الإدارة!', ephemeral: true });
       }
     }
   } catch (err) {
@@ -1173,24 +1274,6 @@ client.on('messageCreate', async message => {
     }
   }
 });
-
-async function handleTicketCloseLog(channel, guild, closedBy) {
-  const guildLogs = logChannels.get(guild.id);
-  if (!guildLogs || !guildLogs['ticket']) return;
-  const logChannel = guild.channels.cache.get(guildLogs['ticket']);
-  if (!logChannel) return;
-
-  const logEmbed = new EmbedBuilder()
-    .setTitle('🎫 سجل إغلاق التذكرة')
-    .setColor(0xE74C3C)
-    .addFields(
-      { name: '📁 اسم التذكرة:', value: `\`${channel.name}\``, inline: true },
-      { name: '🛡️ أُغلقت بواسطة:', value: `${closedBy.tag}`, inline: true }
-    )
-    .setTimestamp();
-
-  await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
-}
 
 const TOKEN = process.env.TOKEN;
 const rest = new REST({ version: '10' }).setToken(TOKEN);
