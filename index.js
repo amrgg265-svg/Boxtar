@@ -355,10 +355,12 @@ client.on('interactionCreate', async interaction => {
         );
 
         const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('tk_set_role').setLabel('تحديد رتبة الدعم').setEmoji('🛡️').setStyle(ButtonStyle.Success)
+          new ButtonBuilder().setCustomId('tk_set_embed_color').setLabel('تغيير لون الامبد').setEmoji('🎨').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('tk_set_btn_color').setLabel('تغيير لون زر التكت').setEmoji('🔘').setStyle(ButtonStyle.Secondary)
         );
 
         const row3 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('tk_set_role').setLabel('تحديد رتبة الدعم').setEmoji('🛡️').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId('tk_set_category').setLabel('تحديد category وجود التكتات').setEmoji('📂').setStyle(ButtonStyle.Secondary)
         );
 
@@ -464,6 +466,24 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `📌 **حدد الرتبة التي تريد منحها صلاحية استخدام أمر \`/${selectedCmd}\`:**`, components: [row], ephemeral: true });
       }
 
+      // قائمة اختيار لون الـ Embed
+      if (interaction.customId === 'select_embed_color') {
+        const colorVal = parseInt(interaction.values[0]);
+        let current = ticketData.get(interaction.guild.id) || {};
+        current.embedColor = colorVal;
+        ticketData.set(interaction.guild.id, current);
+        return interaction.reply({ content: '🎨 **تم تغيير لون الامبد بنجاح!**', ephemeral: true });
+      }
+
+      // قائمة اختيار لون الزر
+      if (interaction.customId === 'select_button_color') {
+        const styleVal = parseInt(interaction.values[0]);
+        let current = ticketData.get(interaction.guild.id) || {};
+        current.buttonStyle = styleVal;
+        ticketData.set(interaction.guild.id, current);
+        return interaction.reply({ content: '🔘 **تم تغيير لون زر فتح التكت بنجاح!**', ephemeral: true });
+      }
+
       if (interaction.customId === 'ticket_options_menu') {
         const selectedOption = interaction.values[0];
         if (selectedOption === 't_come') {
@@ -481,7 +501,6 @@ client.on('interactionCreate', async interaction => {
           await handleTicketCloseLog(interaction.channel, interaction.guild, interaction.user);
           await interaction.channel.delete().catch(() => {});
         } else if (selectedOption === 't_unclaim') {
-          // إلغاء الاستلام وإعادة صلاحيات رؤية التذكرة لرتبة الدعم مجدداً
           const data = ticketData.get(interaction.guild.id) || {};
           if (data.supportRoleId) {
             await interaction.channel.permissionOverwrites.edit(data.supportRoleId, {
@@ -510,7 +529,7 @@ client.on('interactionCreate', async interaction => {
         let current = ticketData.get(interaction.guild.id) || {};
         current.supportRoleId = roleId;
         ticketData.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ **تم تحديد رتبة الدعم بنجاح: <@&roleId>**`, ephemeral: true });
+        return interaction.reply({ content: `✅ **تم تحديد رتبة الدعم بنجاح: <@&${roleId}>**`, ephemeral: true });
       }
     }
 
@@ -562,6 +581,39 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
+      // قائمة اختيار لون الامبد
+      if (id === 'tk_set_embed_color') {
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId('select_embed_color')
+          .setPlaceholder('اختر لون الامبد...')
+          .addOptions(
+            { label: 'بنفسجي', value: '9807270', emoji: '💜' },
+            { label: 'أحمر', value: '15158332', emoji: '❤️' },
+            { label: 'أزرق', value: '5793266', emoji: '💙' },
+            { label: 'أخضر', value: '5763719', emoji: '💚' },
+            { label: 'أصفر', value: '16776960', emoji: '💛' },
+            { label: 'برتقالي', value: '15105570', emoji: '🧡' },
+            { label: 'أسود / داكن', value: '2895667', emoji: '🖤' }
+          );
+        const row = new ActionRowBuilder().addComponents(menu);
+        return interaction.reply({ content: '🎨 **اختر اللون المطلوب للامبد:**', components: [row], ephemeral: true });
+      }
+
+      // قائمة اختيار لون زر فتح التكت
+      if (id === 'tk_set_btn_color') {
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId('select_button_color')
+          .setPlaceholder('اختر لون زر التكت...')
+          .addOptions(
+            { label: 'بنفسجي (Blurple)', value: `${ButtonStyle.Primary}`, emoji: '💜' },
+            { label: 'أخضر (Success)', value: `${ButtonStyle.Success}`, emoji: '💚' },
+            { label: 'رمادي (Secondary)', value: `${ButtonStyle.Secondary}`, emoji: '🩶' },
+            { label: 'أحمر (Danger)', value: `${ButtonStyle.Danger}`, emoji: '❤️' }
+          );
+        const row = new ActionRowBuilder().addComponents(menu);
+        return interaction.reply({ content: '🔘 **اختر لون زر فتح التكت:**', components: [row], ephemeral: true });
+      }
+
       if (id === 'tk_set_role') {
         const roleMenu = new RoleSelectMenuBuilder()
           .setCustomId('select_ticket_support_role')
@@ -592,10 +644,13 @@ client.on('interactionCreate', async interaction => {
           return interaction.reply({ content: '❌ **يرجى تعديل عنوان الـ panel وتعيين بيانات الزر أولاً!**', ephemeral: true });
         }
 
+        const embedColor = data.embedColor ? parseInt(data.embedColor) : 0x5865F2;
+        const buttonStyle = data.buttonStyle ? parseInt(data.buttonStyle) : ButtonStyle.Primary;
+
         const embed = new EmbedBuilder()
           .setTitle(data.title)
           .setDescription(data.desc || 'اضغط على الزر أدناه لفتح تذكرة جديدة.')
-          .setColor(0x5865F2);
+          .setColor(embedColor);
 
         if (data.img && data.img.startsWith('http')) embed.setImage(data.img);
 
@@ -604,7 +659,7 @@ client.on('interactionCreate', async interaction => {
             .setCustomId('create_ticket_btn')
             .setLabel(data.btnText || 'فتح تذكرة')
             .setEmoji(data.btnEmoji || '🎫')
-            .setStyle(ButtonStyle.Primary)
+            .setStyle(buttonStyle)
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
@@ -627,12 +682,10 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
-      // زر استلام التذكرة (Claim)
       if (id === 'claim_ticket') {
         const data = ticketData.get(interaction.guild.id) || {};
         const supportRoleId = data.supportRoleId;
 
-        // التحقق مما إذا كان المستخدم يملك رتبة الدعم أو أدمن
         const isSupport = supportRoleId && interaction.member.roles.cache.has(supportRoleId);
         const isAdmin = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
 
@@ -640,7 +693,6 @@ client.on('interactionCreate', async interaction => {
           return interaction.reply({ content: '❌ **عذراً، هذه اللوحة مخصصة لطاقم الدعم الفني فقط!**', ephemeral: true });
         }
 
-        // إخفاء التذكرة تماماً عن باقي رتبة الدعم (سحب صلاحية المشاهدة والكتابة عن رتبة الدعم)
         if (supportRoleId) {
           await interaction.channel.permissionOverwrites.edit(supportRoleId, {
             ViewChannel: false,
@@ -649,7 +701,6 @@ client.on('interactionCreate', async interaction => {
           }).catch(() => {});
         }
 
-        // منح الإداري المستلم صلاحية كاملة ورؤية وتحدث
         await interaction.channel.permissionOverwrites.edit(interaction.user.id, {
           ViewChannel: true,
           SendMessages: true,
@@ -769,7 +820,6 @@ client.on('interactionCreate', async interaction => {
         const data = ticketData.get(guild.id) || {};
         const settings = ticketSettings.get(guild.id) || {};
 
-        // الأذونات الأولية: الباقي ممنوعون تماماً، صاحب التذكرة يرى ويكتب، رتبة الدعم يهددون (رؤية فقط بدون كتابة حتى يتم الاستلام)
         const overwrites = [
           { id: guild.id, denied: [PermissionFlagsBits.ViewChannel] },
           { id: user.id, allowed: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
@@ -779,7 +829,7 @@ client.on('interactionCreate', async interaction => {
           overwrites.push({
             id: data.supportRoleId,
             allowed: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-            denied: [PermissionFlagsBits.SendMessages] // رؤية فقط بدون إمكانية الكتابة حتى يتم الضغط على استلام
+            denied: [PermissionFlagsBits.SendMessages]
           });
         }
 
@@ -819,7 +869,7 @@ client.on('interactionCreate', async interaction => {
             { label: 'Rename', description: 'تغيير اسم التذكرة', value: 't_rename', emoji: '📝' },
             { label: 'Rating', description: 'تقييم الإداري (مستلم التذكره)', value: 't_rating', emoji: '⭐' },
             { label: 'Close', description: 'غلق التذكرة', value: 't_close', emoji: '🔒' },
-            { label: 'Unclaim', description: 'إلغاء استلاستلام التكت', value: 't_unclaim', emoji: '❌' },
+            { label: 'Unclaim', description: 'إلغاء استلام التكت', value: 't_unclaim', emoji: '❌' },
             { label: 'Restart', description: 'إعادة تحميل القائمة', value: 't_restart', emoji: '🔄' }
           );
 
@@ -874,7 +924,6 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// وظيفة جلب رسائل ومحادثات التذكرة وإرسالها لروم سجل التكتات عند الإغلاق
 async function handleTicketCloseLog(channel, guild, closedBy) {
   const guildLogs = logChannels.get(guild.id);
   if (!guildLogs || !guildLogs['ticket']) return;
