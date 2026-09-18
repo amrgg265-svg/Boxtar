@@ -481,7 +481,16 @@ client.on('interactionCreate', async interaction => {
           await handleTicketCloseLog(interaction.channel, interaction.guild, interaction.user);
           await interaction.channel.delete().catch(() => {});
         } else if (selectedOption === 't_unclaim') {
-          return interaction.reply({ content: '❌ **تم إلغاء استلام التذكرة.**', ephemeral: true });
+          // إلغاء الاستلام وإعادة صلاحيات رؤية التذكرة لرتبة الدعم مجدداً
+          const data = ticketData.get(interaction.guild.id) || {};
+          if (data.supportRoleId) {
+            await interaction.channel.permissionOverwrites.edit(data.supportRoleId, {
+              ViewChannel: true,
+              SendMessages: false,
+              ReadMessageHistory: true
+            }).catch(() => {});
+          }
+          return interaction.reply({ content: '❌ **تم إلغاء استلام التذكرة وإعادتها لقسم الدعم الفني.**', ephemeral: true });
         } else if (selectedOption === 't_restart') {
           return interaction.reply({ content: '🔄 **تم إعادة تحميل قائمة الخيارات بنجاح.**', ephemeral: true });
         }
@@ -501,7 +510,7 @@ client.on('interactionCreate', async interaction => {
         let current = ticketData.get(interaction.guild.id) || {};
         current.supportRoleId = roleId;
         ticketData.set(interaction.guild.id, current);
-        return interaction.reply({ content: `✅ **تم تحديد رتبة الدعم بنجاح: <@&${roleId}>**`, ephemeral: true });
+        return interaction.reply({ content: `✅ **تم تحديد رتبة الدعم بنجاح: <@&roleId>**`, ephemeral: true });
       }
     }
 
@@ -618,6 +627,38 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
+      // زر استلام التذكرة (Claim)
+      if (id === 'claim_ticket') {
+        const data = ticketData.get(interaction.guild.id) || {};
+        const supportRoleId = data.supportRoleId;
+
+        // التحقق مما إذا كان المستخدم يملك رتبة الدعم أو أدمن
+        const isSupport = supportRoleId && interaction.member.roles.cache.has(supportRoleId);
+        const isAdmin = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+
+        if (!isSupport && !isAdmin) {
+          return interaction.reply({ content: '❌ **عذراً، هذه اللوحة مخصصة لطاقم الدعم الفني فقط!**', ephemeral: true });
+        }
+
+        // إخفاء التذكرة تماماً عن باقي رتبة الدعم (سحب صلاحية المشاهدة والكتابة عن رتبة الدعم)
+        if (supportRoleId) {
+          await interaction.channel.permissionOverwrites.edit(supportRoleId, {
+            ViewChannel: false,
+            SendMessages: false,
+            ReadMessageHistory: false
+          }).catch(() => {});
+        }
+
+        // منح الإداري المستلم صلاحية كاملة ورؤية وتحدث
+        await interaction.channel.permissionOverwrites.edit(interaction.user.id, {
+          ViewChannel: true,
+          SendMessages: true,
+          ReadMessageHistory: true
+        });
+
+        return interaction.reply({ content: `🟢 **تم استلام التذكرة بواسطة ${interaction.user}**. أصبحت التذكرة مخفية عن بقية طاقم الدعم.` });
+      }
+
       if (id === 'close_ticket') {
         await interaction.reply({ content: '🔒 **جاري إغلاق التذكرة وحفظ السجل...**', ephemeral: true });
         await handleTicketCloseLog(interaction.channel, interaction.guild, interaction.user);
@@ -728,6 +769,7 @@ client.on('interactionCreate', async interaction => {
         const data = ticketData.get(guild.id) || {};
         const settings = ticketSettings.get(guild.id) || {};
 
+        // الأذونات الأولية: الباقي ممنوعون تماماً، صاحب التذكرة يرى ويكتب، رتبة الدعم يهددون (رؤية فقط بدون كتابة حتى يتم الاستلام)
         const overwrites = [
           { id: guild.id, denied: [PermissionFlagsBits.ViewChannel] },
           { id: user.id, allowed: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
@@ -736,7 +778,8 @@ client.on('interactionCreate', async interaction => {
         if (data.supportRoleId) {
           overwrites.push({
             id: data.supportRoleId,
-            allowed: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
+            allowed: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+            denied: [PermissionFlagsBits.SendMessages] // رؤية فقط بدون إمكانية الكتابة حتى يتم الضغط على استلام
           });
         }
 
