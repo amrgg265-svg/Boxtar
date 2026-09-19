@@ -205,6 +205,20 @@ const commands = [
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو').setRequired(true)),
 
   new SlashCommandBuilder()
+    .setName('warnings-all')
+    .setDescription('عرض جميع التحذيرات والأعضاء الذين عليهم تحذيرات في السيرفر'),
+
+  new SlashCommandBuilder()
+    .setName('warnings-member')
+    .setDescription('عرض تحذيرات عضو محدد')
+    .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو لعرض تحذيراته').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('warnings-clear-all')
+    .setDescription('حذف جميع التحذيرات المسجلة في السيرفر دفعة واحدة')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
     .setName('nick')
     .setDescription('تغيير لقب العضو في السيرفر')
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو').setRequired(true))
@@ -250,8 +264,8 @@ const commands = [
     .setDescription('عرض تفاصيل الحساب')
     .addUserOption(opt => opt.setName('العضو').setDescription('اختر العضو لعرض معلوماته').setRequired(false)),
 
-  new SlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
-  new SlashCommandBuilder().setName('help').setDescription('يعرض لك دليل وقائمة بجميع أوامر البوت ووظائفها بالتفصيل')
+  newSlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
+  new SlashCommandBuilder().setName('help').setDescription('يعرس لك دليل وقائمة بجميع أوامر البوت ووظائفها بالتفصيل')
 ];
 
 async function sendLog(guild, logType, title, color, fields) {
@@ -271,6 +285,14 @@ async function sendLog(guild, logType, title, color, fields) {
 
 function getRequiredXp(level) {
   return Math.floor(200 * Math.pow(1.2, level));
+}
+
+// دالة مساعدة للتحقق من الرتب (منع معاقبة النفس أو رتبة أعلى/مساوية)
+function canPunish(executor, target) {
+  if (executor.id === target.id) return false; // لا يمكن معاقبة النفس
+  if (executor.id === executor.guild.ownerId) return true; // صاحب السيرفر مستثنى
+  if (target.id === executor.guild.ownerId) return false; // لا يمكن معاقبة صاحب السيرفر
+  return executor.roles.highest.position > target.roles.highest.position;
 }
 
 client.on('interactionCreate', async interaction => {
@@ -301,7 +323,7 @@ client.on('interactionCreate', async interaction => {
             },
             { 
               name: '⚠️ نظام التحذيرات والسجلات الإدارية', 
-              value: '`/warn` (تحذير الأعضاء وتوثيق السجل)\n`/unwarn` (إزالة كافة التحذيرات عن العضو)\nتسجيل وتوثيق كافة العقوبات مع ذكر المسبب والمسؤول وقناة السجل المخصصة.', 
+              value: '`/warn` (تحذير الأعضاء وتوثيق السجل)\n`/unwarn` (إزالة كافة التحذيرات عن العضو)\n`/warnings-all` (عرض كافة التحذيرات في السيرفر)\n`/warnings-member` (عرض تحذيرات عضو محدد)\n`/warnings-clear-all` (حذف جميع التحذيرات)', 
               inline: false 
             },
             { 
@@ -452,6 +474,7 @@ client.on('interactionCreate', async interaction => {
         const jSettings = jailSettings.get(guild.id);
 
         if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود في السيرفر.', ephemeral: true });
+        if (!canPunish(member, targetMember)) return interaction.reply({ content: '❌ عذراً، لا يمكنك معاقبة نفسك أو شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
         if (!jSettings || !jSettings.roleId) return interaction.reply({ content: '❌ لم يتم إعداد رتبة السجن بعد!', ephemeral: true });
 
         if (jSettings.jailerRoleId && !member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -475,9 +498,9 @@ client.on('interactionCreate', async interaction => {
         }
 
         await sendLog(guild, 'jail', '⛓️ سجل سجن عضو جديد', 0xE74C3C, [
-          { name: '👤 العضو المطرود/المعاقب:', value: `${user} (${user.tag})`, inline: false },
+          { name: '👤 العضو المعاقب:', value: `${user} (${user.tag})`, inline: false },
           { name: '📝 سبب العقوبة:', value: reason, inline: false },
-          { name: '🛡️ الإداري الذي صلى العقوبة:', value: `${interaction.user} (${interaction.user.tag})`, inline: false },
+          { name: '🛡️ الإداري:', value: `${interaction.user} (${interaction.user.tag})`, inline: false },
           { name: '🏷️ الرتب المزالة:', value: removedRoleMentions, inline: false }
         ]);
 
@@ -491,6 +514,7 @@ client.on('interactionCreate', async interaction => {
         const savedRoles = jailedUsers.get(`${guild.id}_${user.id}`);
 
         if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
+        if (!canPunish(member, targetMember)) return interaction.reply({ content: '❌ عذراً، لا يمكنك تنفيذ هذا الإجراء على شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
         if (!jSettings || !jSettings.roleId) return interaction.reply({ content: '❌ نظام السجن غير معدل.', ephemeral: true });
 
         await targetMember.roles.remove(jSettings.roleId).catch(() => {});
@@ -513,6 +537,8 @@ client.on('interactionCreate', async interaction => {
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
 
         if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
+        if (!canPunish(member, targetMember)) return interaction.reply({ content: '❌ عذراً، لا يمكنك تغيير لقب شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
+        
         await targetMember.setNickname(newNick).catch(() => {});
         return interaction.reply({ content: `✅ تم تغيير لقب العضو ${user.tag} إلى **${newNick}**.`, ephemeral: true });
       }
@@ -523,12 +549,14 @@ client.on('interactionCreate', async interaction => {
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
 
         if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
+        if (!canPunish(member, targetMember)) return interaction.reply({ content: '❌ عذراً، لا يمكنك رفع الكتم عن شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
+
         await targetMember.timeout(null, reason).catch(() => {});
         
         await sendLog(guild, 'timeout', '🔊 سجل رفع الكتم (Untimeout)', 0x2ECC71, [
           { name: '👤 العضو المرفع عنه الكتم:', value: `${user} (${user.tag})`, inline: false },
           { name: '📝 السبب:', value: reason, inline: false },
-          { name: '🛡️ الإداري الذي أصدر العقوبة/الرفع:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
+          { name: '🛡️ الإداري:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
         ]);
 
         return interaction.reply({ content: `✅ تم رفع الكتم عن العضو **${user.tag}**.`, ephemeral: true });
@@ -537,8 +565,12 @@ client.on('interactionCreate', async interaction => {
       if (commandName === 'warn') {
         const user = options.getUser('العضو');
         const reason = options.getString('السبب');
+        const targetMember = await guild.members.fetch(user.id).catch(() => null);
+
+        if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
+        if (!canPunish(member, targetMember)) return interaction.reply({ content: '❌ عذراً، لا يمكنك تحذير نفسك أو شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
+
         const key = `${guild.id}_${user.id}`;
-        
         let warns = userWarnings.get(key) || [];
         warns.push({ reason, admin: interaction.user.tag, date: Date.now() });
         userWarnings.set(key, warns);
@@ -546,7 +578,7 @@ client.on('interactionCreate', async interaction => {
         await sendLog(guild, 'warn', '⚠️ سجل تحذير جديد (Warn)', 0xE74C3C, [
           { name: '👤 العضو المعاقب:', value: `${user} (${user.tag})`, inline: false },
           { name: '📝 سبب العقوبة:', value: reason, inline: false },
-          { name: '🛡️ الإداري الذي أعطى العقوبة:', value: `${interaction.user} (${interaction.user.tag})`, inline: false },
+          { name: '🛡️ الإداري:', value: `${interaction.user} (${interaction.user.tag})`, inline: false },
           { name: '📊 إجمالي التحذيرات:', value: `${warns.length} تحذيرات`, inline: false }
         ]);
 
@@ -555,16 +587,91 @@ client.on('interactionCreate', async interaction => {
 
       if (commandName === 'unwarn') {
         const user = options.getUser('العضو');
+        const targetMember = await guild.members.fetch(user.id).catch(() => null);
+
+        if (targetMember && !canPunish(member, targetMember)) {
+          return interaction.reply({ content: '❌ عذراً، لا يمكنك إزالة التحذيرات عن شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
+        }
+
         const key = `${guild.id}_${user.id}`;
-        
         userWarnings.delete(key);
 
         await sendLog(guild, 'warn', '🗑️ سجل إزالة التحذيرات (Unwarn)', 0x2ECC71, [
           { name: '👤 العضو:', value: `${user} (${user.tag})`, inline: false },
-          { name: '🛡️ الإداري الذي أزال التحذيرات:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
+          { name: '🛡️ الإداري:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
         ]);
 
         return interaction.reply({ content: `✅ تم مسح كافة التحذيرات عن العضو **${user.tag}** بنجاح.`, ephemeral: true });
+      }
+
+      // 1. أمر عرض جميع التحذيرات والأعضاء الذين عليهم تحذيرات
+      if (commandName === 'warnings-all') {
+        const guildWarns = Array.from(userWarnings.entries())
+          .filter(([key]) => key.startsWith(`${guild.id}_`));
+
+        if (guildWarns.length === 0) {
+          return interaction.reply({ content: '❌ لا توجد أي تحذيرات مسجلة في هذا السيرفر حالياً.', ephemeral: true });
+        }
+
+        let desc = '📋 **قائمة الأعضاء الذين عليهم تحذيرات في السيرفر:**\n\n';
+        guildWarns.forEach(([key, warns]) => {
+          const userId = key.split('_')[1];
+          desc += `👤 <@${userId}> ➔ عدد التحذيرات: **${warns.length}**\n`;
+          warns.forEach((w, i) => {
+            desc += `   \`#${i + 1}\` السبب: ${w.reason} (بواسطة: ${w.admin})\n`;
+          });
+          desc += '\n';
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle('⚠️ سجل كافة تحذيرات السيرفر')
+          .setDescription(desc.substring(0, 4096))
+          .setColor(0xE74C3C)
+          .setTimestamp();
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // 2. أمر عرض تحذيرات عضو محدد
+      if (commandName === 'warnings-member') {
+        const user = options.getUser('العضو');
+        const key = `${guild.id}_${user.id}`;
+        const warns = userWarnings.get(key) || [];
+
+        if (warns.length === 0) {
+          return interaction.reply({ content: `✅ العضو **${user.tag}** ليس لديه أي تحذيرات مسجلة.`, ephemeral: true });
+        }
+
+        let desc = `📋 **تحذيرات العضو ${user}:**\n\n`;
+        warns.forEach((w, i) => {
+          desc += `\`#${i + 1}\` السبب: **${w.reason}**\n   🛡️ بواسطة: ${w.admin} \vert{} 📅 <t:${Math.floor(w.date / 1000)}:R>\n\n`;
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle(`⚠️ سجل تحذيرات: ${user.username}`)
+          .setDescription(desc)
+          .setColor(0xE74C3C)
+          .setThumbnail(user.displayAvatarURL())
+          .setTimestamp();
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // 3. أمر حذف جميع التحذيرات في السيرفر
+      if (commandName === 'warnings-clear-all') {
+        let count = 0;
+        for (const key of userWarnings.keys()) {
+          if (key.startsWith(`${guild.id}_`)) {
+            userWarnings.delete(key);
+            count++;
+          }
+        }
+
+        await sendLog(guild, 'warn', '🗑️ حذف جميع تحذيرات السيرفر', 0xE74C3C, [
+          { name: '🛡️ الإداري المسؤول:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
+        ]);
+
+        return interaction.reply({ content: `✅ تمت مسح وحذف جميع التحذيرات في السيرفر بنجاح (تمت إزالة سجلات ${count} عضو).`, ephemeral: true });
       }
 
       if (commandName === 'azkar-setup') {
@@ -808,12 +915,18 @@ client.on('interactionCreate', async interaction => {
       if (commandName === 'ban') {
         const user = options.getUser('العضو');
         const reason = options.getString('السبب');
+        const targetMember = await guild.members.fetch(user.id).catch(() => null);
+
+        if (targetMember && !canPunish(member, targetMember)) {
+          return interaction.reply({ content: '❌ عذراً، لا يمكنك حظر نفسك أو شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
+        }
+
         await guild.members.ban(user.id, { reason });
         
         await sendLog(guild, 'ban', '🔨 سجل حظر جديد (Ban)', 0xE74C3C, [
-          { name: '👤 العضو المطرود/المعاقب:', value: `${user} (${user.tag})`, inline: false },
+          { name: '👤 العضو المعاقب:', value: `${user} (${user.tag})`, inline: false },
           { name: '📝 سبب العقوبة:', value: reason, inline: false },
-          { name: '🛡️ الإداري الذي أعطى العقوبة:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
+          { name: '🛡️ الإداري:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
         ]);
 
         return interaction.reply({ content: `✅ تم حظر العضو **${user.tag}**.`, ephemeral: true });
@@ -823,12 +936,16 @@ client.on('interactionCreate', async interaction => {
         const user = options.getUser('العضو');
         const reason = options.getString('السبب');
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
+
+        if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
+        if (!canPunish(member, targetMember)) return interaction.reply({ content: '❌ عذراً، لا يمكنك طرد نفسك أو شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
+
         await targetMember.kick(reason);
 
         await sendLog(guild, 'kick', '👢 سجل طرد جديد (Kick)', 0xE74C3C, [
-          { name: '👤 العضو المطرود/المعاقب:', value: `${user} (${user.tag})`, inline: false },
+          { name: '👤 العضو المعاقب:', value: `${user} (${user.tag})`, inline: false },
           { name: '📝 سبب العقوبة:', value: reason, inline: false },
-          { name: '🛡️ الإداري الذي أعطى العقوبة:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
+          { name: '🛡️ الإداري:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
         ]);
 
         return interaction.reply({ content: `✅ تم طرد العضو **${user.tag}**.`, ephemeral: true });
@@ -839,12 +956,16 @@ client.on('interactionCreate', async interaction => {
         const duration = options.getInteger('المدة');
         const reason = options.getString('السبب');
         const targetMember = await guild.members.fetch(user.id).catch(() => null);
+
+        if (!targetMember) return interaction.reply({ content: '❌ العضو غير موجود.', ephemeral: true });
+        if (!canPunish(member, targetMember)) return interaction.reply({ content: '❌ عذراً، لا يمكنك كتم نفسك أو شخص يمتلك رتبة مساوية أو أعلى منك!', ephemeral: true });
+
         await targetMember.timeout(duration, reason);
 
         await sendLog(guild, 'timeout', '⏰ سجل كتم مؤقت (Timeout)', 0xE74C3C, [
-          { name: '👤 العضو المطرود/المعاقب:', value: `${user} (${user.tag})`, inline: false },
+          { name: '👤 العضو المعاقب:', value: `${user} (${user.tag})`, inline: false },
           { name: '📝 سبب العقوبة:', value: reason, inline: false },
-          { name: '🛡️ الإداري الذي أعطى العقوبة:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
+          { name: '🛡️ الإداري:', value: `${interaction.user} (${interaction.user.tag})`, inline: false }
         ]);
 
         return interaction.reply({ content: `✅ تم كتم العضو **${user.tag}**.`, ephemeral: true });
@@ -1541,12 +1662,12 @@ const TOKEN = process.env.TOKEN;
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 client.once('ready', async () => {
-  console.log(`✅ تم تنشيط البوت بنجاح باسم: ${client.user.tag}`);
+  console.log(`Logged in as ${client.user.tag}! 🚀`);
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('✅ تم تسجيل وتحديث كافة الأوامر والأنظمة بنجاح!');
-  } catch (err) {
-    console.error('❌ خطأ أثناء تسجيل الأوامر:', err);
+    console.log('Successfully registered application commands.');
+  } catch (error) {
+    console.error(error);
   }
 });
 
