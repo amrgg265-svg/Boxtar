@@ -264,7 +264,7 @@ const commands = [
     .setDescription('عرض تفاصيل الحساب')
     .addUserOption(opt => opt.setName('العضو').setDescription('اختر العضو لعرض معلوماته').setRequired(false)),
 
-  newSlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
+  new SlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
   new SlashCommandBuilder().setName('help').setDescription('يعرس لك دليل وقائمة بجميع أوامر البوت ووظائفها بالتفصيل')
 ];
 
