@@ -632,7 +632,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
-      // 2. أمر عرض تحذيرات عضو محدد
+      // 2. أمر عرض تحذيرات عضو محدد (تم تصحيح الخطأ هنا)
       if (commandName === 'warnings-member') {
         const user = options.getUser('العضو');
         const key = `${guild.id}_${user.id}`;
