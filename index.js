@@ -1430,8 +1430,8 @@ client.on('messageCreate', async message => {
   }
 });
 
-const TOKEN = process.env.TOKEN;
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}! 🚀`);
@@ -1443,4 +1443,4 @@ client.once('ready', async () => {
   }
 });
 
-client.login(TOKEN);
+client.login(BOT_TOKEN);
