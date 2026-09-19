@@ -126,6 +126,25 @@ const commands = [
         )
     ),
 
+  // الأوامر الجديدة المضافة للإدارة الخاصة باللفلات والأكس بي
+  new SlashCommandBuilder()
+    .setName('reset-all-levels')
+    .setDescription('تصفير وتثبيت XP واللفلات لجميع أعضاء السيرفر إلى الصفر')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('add-xp')
+    .setDescription('إضافة أو منح كمية محددة من الـ XP لعضو معين')
+    .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو').setRequired(true))
+    .addIntegerOption(opt => opt.setName('الكمية').setDescription('عدد نقاط الـ XP المراد إضافتها').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('reset-member-xp')
+    .setDescription('إعادة تعيين (تصفير) XP ولفل عضو محدد ليصبح صفر')
+    .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو المراد تصفير لفله').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
   new SlashCommandBuilder()
     .setName('afk')
     .setDescription('تفعيل وضع الغياب AFK')
@@ -289,16 +308,76 @@ function getRequiredXp(level) {
 
 // دالة مساعدة للتحقق من الرتب (منع معاقبة النفس أو رتبة أعلى/مساوية)
 function canPunish(executor, target) {
-  if (executor.id === target.id) return false; // لا يمكن معاقبة النفس
-  if (executor.id === executor.guild.ownerId) return true; // صاحب السيرفر مستثنى
-  if (target.id === executor.guild.ownerId) return false; // لا يمكن معاقبة صاحب السيرفر
+  if (executor.id === target.id) return false; 
+  if (executor.id === executor.guild.ownerId) return true; 
+  if (target.id === executor.guild.ownerId) return false; 
   return executor.roles.highest.position > target.roles.highest.position;
+}
+
+// دالة مساعدة للتحقق من صلاحية تعديل إعدادات اللفل (الرتبة المحددة أو الأستاذية)
+function canManageLevels(member) {
+  if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  const currentSet = levelSettings.get(member.guild.id);
+  if (currentSet && currentSet.managerRoleId && member.roles.cache.has(currentSet.managerRoleId)) {
+    return true;
+  }
+  return false;
 }
 
 client.on('interactionCreate', async interaction => {
   try {
     if (interaction.isChatInputCommand()) {
       const { commandName, options, guild, member, channel } = interaction;
+
+      // تنفيذ أمر تصفير جميع لفلات وأكس بي السيرفر
+      if (commandName === 'reset-all-levels') {
+        if (!canManageLevels(member)) {
+          return interaction.reply({ content: '❌ عذراً، لا تمتلك الصلاحية أو الرتبة المخصصة لتعديل إعدادات أو لفلات السيرفر!', ephemeral: true });
+        }
+        let count = 0;
+        for (const key of userLevels.keys()) {
+          if (key.startsWith(`${guild.id}_`)) {
+            userLevels.set(key, { xp: 0, level: 0 });
+            count++;
+          }
+        }
+        return interaction.reply({ content: `✅ تم تصفير وإعادة تعيين نقاط الـ XP واللفلات لجميع الأعضاء (${count} عضو) إلى الصفر بنجاح.`, ephemeral: true });
+      }
+
+      // تنفيذ أمر إضافة XP لعضو محدد
+      if (commandName === 'add-xp') {
+        if (!canManageLevels(member)) {
+          return interaction.reply({ content: '❌ عذراً، لا تمتلك الصلاحية أو الرتبة المخصصة للتحكم باللفلات!', ephemeral: true });
+        }
+        const user = options.getUser('العضو');
+        const amount = options.getInteger('الكمية');
+        const key = `${guild.id}_${user.id}`;
+        let userData = userLevels.get(key) || { xp: 0, level: 0 };
+        
+        userData.xp += amount;
+        // نظام الترقية البسيط عند تجاوز الحد
+        let nextXp = getRequiredXp(userData.level);
+        while (userData.xp >= nextXp) {
+          userData.xp -= nextXp;
+          userData.level += 1;
+          nextXp = getRequiredXp(userData.level);
+        }
+        userLevels.set(key, userData);
+
+        return interaction.reply({ content: `✅ تم إضافة **${amount} XP** للعضو ${user}. أصبح مستواه الحالي: **${userData.level}** ومجموع نقاطه الحالية: **${userData.xp}**`, ephemeral: true });
+      }
+
+      // تنفيذ أمر إعادة تعيين (تصفير) XP ولفل عضو محدد
+      if (commandName === 'reset-member-xp') {
+        if (!canManageLevels(member)) {
+          return interaction.reply({ content: '❌ عذراً، لا تمتلك الصلاحية أو الرتبة المخصصة لتعديل اللفلات!', ephemeral: true });
+        }
+        const user = options.getUser('العضو');
+        const key = `${guild.id}_${user.id}`;
+        userLevels.set(key, { xp: 0, level: 0 });
+
+        return interaction.reply({ content: `✅ تم تصفير وإعادة تعيين XP ولفل العضو ${user} ليصبحان **صفر** بنجاح.`, ephemeral: true });
+      }
 
       if (commandName === 'help') {
         const helpEmbed = new EmbedBuilder()
@@ -308,7 +387,7 @@ client.on('interactionCreate', async interaction => {
           .addFields(
             { 
               name: '⭐ نظام اللفلات والتفاعل (Levels & XP)', 
-              value: '`/level-setup` (تفعيل/إيقاف، تحديد XP الرسائل، تفعيل رومات الصوت)\n`/level` أو `?level` (عرض بطاقة اللفل المصورة وسرعة التقدم - مع زيادة 20% لكل لفل)\n`/top` (عرض قائمة الترتيب لأعلى 10 أعضاء مع خيارات الفترة: يوم، أسبوع، شهر، الكل)', 
+              value: '`/level-setup` (تفعيل/إيقاف، تحديد XP الرسائل، تفعيل رومات الصوت، وتحديد رتبة المشرفين)\n`/level` أو `?level` (عرض بطاقة اللفل المصورة وسرعة التقدم - مع زيادة 20% لكل لفل)\n`/top` (عرض قائمة الترتيب لأعلى 10 أعضاء مع خيارات الفترة: يوم، أسبوع، شهر، الكل)\n`/reset-all-levels`, `/add-xp`, `/reset-member-xp` (أوامر الإدارة الجديدة لللفلات)', 
               inline: false 
             },
             { 
@@ -604,7 +683,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `✅ تم مسح كافة التحذيرات عن العضو **${user.tag}** بنجاح.`, ephemeral: true });
       }
 
-      // 1. أمر عرض جميع التحذيرات والأعضاء الذين عليهم تحذيرات
       if (commandName === 'warnings-all') {
         const guildWarns = Array.from(userWarnings.entries())
           .filter(([key]) => key.startsWith(`${guild.id}_`));
@@ -632,7 +710,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
-      // 2. أمر عرض تحذيرات عضو محدد
       if (commandName === 'warnings-member') {
         const user = options.getUser('العضو');
         const key = `${guild.id}_${user.id}`;
@@ -657,7 +734,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
-      // 3. أمر حذف جميع التحذيرات في السيرفر
       if (commandName === 'warnings-clear-all') {
         let count = 0;
         for (const key of userWarnings.keys()) {
@@ -726,14 +802,15 @@ client.on('interactionCreate', async interaction => {
 
       if (commandName === 'level-setup') {
         await interaction.deferReply({ ephemeral: true });
-        const currentLvlSet = levelSettings.get(guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        const currentLvlSet = levelSettings.get(guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true, managerRoleId: null };
         
         const toggleBtnLabel = currentLvlSet.enabled ? 'إيقاف نظام اللفلات 🛑' : 'تفعيل نظام اللفلات ✅';
         const toggleBtnStyle = currentLvlSet.enabled ? ButtonStyle.Danger : ButtonStyle.Success;
+        const managerRoleText = currentLvlSet.managerRoleId ? `<@&${currentLvlSet.managerRoleId}>` : 'غير محدد (الأدمشن فقط) ❌';
 
         const embed = new EmbedBuilder()
           .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
-          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n📈 *معلومة: متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n🏷️ رتبة مشرفي الإعدادات: ${managerRoleText}\n📈 *معلومة: متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
@@ -742,7 +819,8 @@ client.on('interactionCreate', async interaction => {
         );
 
         const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('lvl_set_manager_role_btn').setLabel('تحديد رتبة التعديل 🏷️').setStyle(ButtonStyle.Secondary)
         );
 
         return interaction.editReply({ embeds: [embed], components: [row1, row2] });
@@ -989,6 +1067,14 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `✅ تم تحديد رتبة السجان: <@&${roleId}>`, ephemeral: true });
       }
 
+      if (interaction.customId === 'lvl_set_manager_role_menu') {
+        const roleId = interaction.values[0];
+        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true, managerRoleId: null };
+        currentLvlSet.managerRoleId = roleId;
+        levelSettings.set(interaction.guild.id, currentLvlSet);
+        return interaction.reply({ content: `✅ تم تحديد رتبة مشرفي إعدادات ونظام اللفلات بنجاح: <@&${roleId}>`, ephemeral: true });
+      }
+
       if (interaction.customId.startsWith('app_set_role_menu_')) {
         const appNum = interaction.customId.replace('app_set_role_menu_', '');
         const roleId = interaction.values[0];
@@ -1061,16 +1147,17 @@ client.on('interactionCreate', async interaction => {
       const id = interaction.customId;
 
       if (id === 'lvl_toggle_system') {
-        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true, managerRoleId: null };
         currentLvlSet.enabled = !currentLvlSet.enabled;
         levelSettings.set(interaction.guild.id, currentLvlSet);
 
         const toggleBtnLabel = currentLvlSet.enabled ? 'إيقاف نظام اللفلات 🛑' : 'تفعيل نظام اللفلات ✅';
         const toggleBtnStyle = currentLvlSet.enabled ? ButtonStyle.Danger : ButtonStyle.Success;
+        const managerRoleText = currentLvlSet.managerRoleId ? `<@&${currentLvlSet.managerRoleId}>` : 'غير محدد (الأدمشن فقط) ❌';
 
         const embed = new EmbedBuilder()
           .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
-          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n📈 *متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n🏷️ رتبة مشرفي الإعدادات: ${managerRoleText}\n📈 *متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
@@ -1079,7 +1166,8 @@ client.on('interactionCreate', async interaction => {
         );
 
         const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('lvl_set_manager_role_btn').setLabel('تحديد رتبة التعديل 🏷️').setStyle(ButtonStyle.Secondary)
         );
 
         return interaction.update({ embeds: [embed], components: [row1, row2] });
@@ -1100,16 +1188,17 @@ client.on('interactionCreate', async interaction => {
       }
 
       if (id === 'lvl_toggle_voice') {
-        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true, managerRoleId: null };
         currentLvlSet.voiceXpEnabled = !currentLvlSet.voiceXpEnabled;
         levelSettings.set(interaction.guild.id, currentLvlSet);
 
         const toggleBtnLabel = currentLvlSet.enabled ? 'إيقاف نظام اللفلات 🛑' : 'تفعيل نظام اللفلات ✅';
         const toggleBtnStyle = currentLvlSet.enabled ? ButtonStyle.Danger : ButtonStyle.Success;
+        const managerRoleText = currentLvlSet.managerRoleId ? `<@&${currentLvlSet.managerRoleId}>` : 'غير محدد (الأدمشن فقط) ❌';
 
         const embed = new EmbedBuilder()
           .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
-          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n📈 *متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n🏷️ رتبة مشرفي الإعدادات: ${managerRoleText}\n📈 *متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
@@ -1118,10 +1207,18 @@ client.on('interactionCreate', async interaction => {
         );
 
         const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('lvl_set_manager_role_btn').setLabel('تحديد رتبة التعديل 🏷️').setStyle(ButtonStyle.Secondary)
         );
 
         return interaction.update({ embeds: [embed], components: [row1, row2] });
+      }
+
+      if (id === 'lvl_set_manager_role_btn') {
+        const roleMenu = new RoleSelectMenuBuilder()
+          .setCustomId('lvl_set_manager_role_menu')
+          .setPlaceholder('اختر الرتبة المخولة بتعديل إعدادات اللفل...');
+        return interaction.reply({ content: '🏷️ اختر الرتبة التي تسمح لأصحابها بتعديل إعدادات اللفلات والتحكم بها:', components: [new ActionRowBuilder().addComponents(roleMenu)], ephemeral: true });
       }
 
       if (id === 'bw_add_word') {
@@ -1400,7 +1497,7 @@ client.on('interactionCreate', async interaction => {
         const val = parseInt(interaction.fields.getTextInputValue('xp_amount_input'));
         if (isNaN(val) || val <= 0) return interaction.reply({ content: '❌ يرجى إدخال رقم صحيح أكبر من صفر.', ephemeral: true });
 
-        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true, managerRoleId: null };
         currentLvlSet.xpPerMessage = val;
         levelSettings.set(interaction.guild.id, currentLvlSet);
 
@@ -1512,163 +1609,42 @@ client.on('interactionCreate', async interaction => {
             { name: `📝 3. ${data.q3 || 'السؤال 3'}:`, value: `> ${ans3}`, inline: false },
             { name: `📝 4. ${data.q4 || 'السؤال 4'}:`, value: `> ${ans4}`, inline: false },
             { name: `📝 5. ${data.q5 || 'السؤال 5'}:`, value: `> ${ans5}`, inline: false }
-          )
-          .setTimestamp();
+          );
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`app_accept_${appNum}_${interaction.user.id}`).setLabel('قبول الطلب').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`app_app_reject_${appNum}_${interaction.user.id}`).setLabel('رفض الطلب').setStyle(ButtonStyle.Danger)
+        );
 
         if (data.logChannelId) {
           const logChan = interaction.guild.channels.cache.get(data.logChannelId);
           if (logChan) {
-            const row = new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId(`app_accept_${appNum}_${interaction.user.id}`).setLabel('أوافق (قبول)').setEmoji('✅').setStyle(ButtonStyle.Success),
-              new ButtonBuilder().setCustomId(`app_reject_${appNum}_${interaction.user.id}`).setLabel('أرفق (رفض)').setEmoji('❌').setStyle(ButtonStyle.Danger)
-            );
-            await logChan.send({ embeds: [embed], components: [row] }).catch(() => {});
+            await logChan.send({ embeds: [embed], components: [row] });
           }
         }
 
-        return interaction.reply({ content: '✅ تم إرسال تقديمك بنجاح إلى الإدارة!', ephemeral: true });
+        return interaction.reply({ content: '✅ تم إرسال إجاباتك بنجاح للإدارة، انتظر الرد قريباً!', ephemeral: true });
       }
     }
   } catch (err) {
-    console.error('خطأ في معالجة التفاعل:', err);
+    console.error(err);
   }
 });
 
-client.on('messageCreate', async message => {
-  if (message.author.bot || !message.guild) return;
-
-  if (message.content.startsWith('?level')) {
-    const targetUser = message.mentions.users.first() || message.author;
-    const key = `${message.guild.id}_${targetUser.id}`;
-    const userData = userLevels.get(key) || { xp: 0, level: 0 };
-    const nextLevelXp = getRequiredXp(userData.level);
-
-    try {
-      const canvas = createCanvas(800, 260);
-      const ctx = canvas.getContext('2d');
-
-      ctx.fillStyle = '#0f0f12';
-      ctx.beginPath();
-      ctx.roundRect(0, 0, canvas.width, canvas.height, 20);
-      ctx.fill();
-
-      ctx.fillStyle = '#1e1e24';
-      ctx.beginPath();
-      ctx.roundRect(240, 175, 510, 28, 14);
-      ctx.fill();
-
-      const percentage = Math.min(userData.xp / nextLevelXp, 1);
-      const progressWidth = Math.max(percentage * 510, 28);
-      
-      const redGradient = ctx.createLinearGradient(240, 0, 750, 0);
-      redGradient.addColorStop(0, '#ff2a2a');
-      redGradient.addColorStop(1, '#990000');
-      
-      ctx.fillStyle = redGradient;
-      ctx.beginPath();
-      ctx.roundRect(240, 175, progressWidth, 28, 14);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 32px sans-serif';
-      ctx.fillText(targetUser.username, 240, 65);
-
-      ctx.fillStyle = '#ff4d4d';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.fillText(`LEVEL: ${userData.level}`, 240, 110);
-
-      ctx.fillStyle = '#cccccc';
-      ctx.font = '18px sans-serif';
-      ctx.fillText(`XP: ${userData.xp} / ${nextLevelXp}`, 400, 110);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(120, 130, 72, 0, Math.PI * 2, true);
-      ctx.closePath();
-      ctx.clip();
-
-      const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 256 });
-      const avatar = await loadImage(avatarURL);
-      ctx.drawImage(avatar, 48, 58, 144, 144);
-      ctx.restore();
-
-      const attachment = { attachment: canvas.toBuffer('image/png'), name: 'rank-card.png' };
-      return message.reply({ files: [attachment] });
-    } catch (err) {
-      console.error(err);
-      return message.reply({ content: `❌ حدث خطأ أثناء إنشاء بطاقة اللفل.` });
-    }
-  }
-
-  const lvlSet = levelSettings.get(message.guild.id);
-  if (lvlSet && lvlSet.enabled) {
-    const key = `${message.guild.id}_${message.author.id}`;
-    let userData = userLevels.get(key) || { xp: 0, level: 0 };
-    
-    userData.xp += (lvlSet.xpPerMessage || 15);
-    const requiredXp = getRequiredXp(userData.level);
-
-    if (userData.xp >= requiredXp) {
-      userData.level += 1;
-      userData.xp = 0;
-      message.channel.send(`🎉 مبروك يا ${message.author}! لقد صعدت إلى المستوى **Level ${userData.level}**! 🚀`).catch(() => {});
-    }
-    userLevels.set(key, userData);
-  }
-
-  const wordsSet = badWordsDB.get(message.guild.id);
-  if (wordsSet && wordsSet.size > 0 && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    const contentLower = message.content.toLowerCase();
-    let foundBadWord = false;
-    for (const word of wordsSet) {
-      if (contentLower.includes(word)) {
-        foundBadWord = true;
-        break;
-      }
-    }
-
-    if (foundBadWord) {
-      await message.delete().catch(() => {});
-      const punishment = badWordsPunishment.get(message.guild.id) || 'delete';
-      
-      if (punishment === 'timeout') {
-        await message.member.timeout(5 * 60 * 1000, 'استخدام كلمات محظورة').catch(() => {});
-      } else if (punishment === 'kick') {
-        await message.member.kick('استخدام كلمات محظورة').catch(() => {});
-      } else if (punishment === 'ban') {
-        await message.member.ban({ reason: 'استخدام كلمات محظورة' }).catch(() => {});
-      }
-
-      const warnMsg = await message.channel.send(`⚠️ ${message.author}، تم حذف رسالتك لاحتوائها على كلمات ممنوعة!`);
-      setTimeout(() => warnMsg.delete().catch(() => {}), 4000);
-      return;
-    }
-  }
-
-  const prot = protectionSettings.get(message.guild.id);
-  if (prot && prot.antiLinks) {
-    if (message.content.includes('http://') || message.content.includes('https://') || message.content.includes('discord.gg/')) {
-      if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-        await message.delete().catch(() => {});
-        const warnMsg = await message.channel.send(`⚠️ ${message.author}، ممنوع إرسال الروابط!`);
-        setTimeout(() => warnMsg.delete().catch(() => {}), 4000);
-        return;
-      }
-    }
-  }
-});
-
-const TOKEN = process.env.TOKEN;
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+// تسجيل الأوامر عند تشغيل البوت
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}! 🚀`);
+  console.log(`Logged in as ${client.user.tag}! 🤖`);
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
     console.log('Successfully registered application commands.');
   } catch (error) {
     console.error(error);
   }
 });
 
-client.login(TOKEN);
+client.login(process.env.DISCORD_TOKEN);
