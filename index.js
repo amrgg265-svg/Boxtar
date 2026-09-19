@@ -55,12 +55,13 @@ const client = new Client({
 const afkUsers = new Map();
 const logChannels = new Map();
 const ticketData = new Map();         
-const applicationsData = new Map(); // تخزين إعدادات التقديمات (name, banner, roleId, logChannelId, q1..q5)
+const applicationsData = new Map(); 
 const customShortcuts = new Map();    
 const commandRoles = new Map();        
 
-const levelSettings = new Map();   
-const userLevels = new Map();      
+// إعدادات ونظام اللفلات المحدث
+const levelSettings = new Map();   // guildId -> { enabled: boolean, xpPerMessage: number, voiceXpEnabled: boolean }
+const userLevels = new Map();      // `${guildId}_${userId}` -> { xp: number, level: number }
 
 const azkarSettings = new Map();
 const protectionSettings = new Map();
@@ -99,13 +100,28 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('level-setup')
-    .setDescription('إعداد وتخصيص نظام اللفلات، معادلة الـ XP، ورتب المكافآت')
+    .setDescription('إعداد وتخصيص نظام اللفلات، تفعيل/إيقاف، XP الرسائل، ورومات الصوت')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('level')
     .setDescription('عرض بطاقة اللفل المصورة وإحصائيات الـ XP')
     .addUserOption(opt => opt.setName('العضو').setDescription('اختر العضو لعرض لفله').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('top')
+    .setDescription('عرض قائمة أعلى 10 أشخاص لفلات وأكس بي في السيرفر')
+    .addStringOption(opt => 
+      opt.setName('الفترة')
+        .setDescription('اختر نطاق الفترة الزمنية للترتيب')
+        .setRequired(false)
+        .addChoices(
+          { name: 'آخر يوم', value: 'day' },
+          { name: 'آخر أسبوع', value: 'week' },
+          { name: 'آخر شهر', value: 'month' },
+          { name: 'الكل (دائم)', value: 'all' }
+        )
+    ),
 
   new SlashCommandBuilder()
     .setName('afk')
@@ -174,7 +190,7 @@ const commands = [
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو').setRequired(true))
     .addStringOption(opt => opt.setName('السبب').setDescription('سبب رفع الكتم').setRequired(true)),
   
-  new SlashCommandBuilder()
+  newSlashCommandBuilder()
     .setName('warn')
     .setDescription('إرسال تحذير إداري لعضو')
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو المراد تحذيره').setRequired(true))
@@ -232,7 +248,7 @@ const commands = [
     .addUserOption(opt => opt.setName('العضو').setDescription('اختر العضو لعرض معلوماته').setRequired(false)),
 
   new SlashCommandBuilder().setName('server-info').setDescription('عرض معلومات السيرفر'),
-  new SlashCommandBuilder().setName('help').setDescription('يعرض لك قائمة بجميع أوامر البوت ووظائفها')
+  new SlashCommandBuilder().setName('help').setDescription('يعرض لك دليل وقائمة بجميع أوامر البوت ووظائفها بالتفصيل')
 ];
 
 async function sendLog(guild, logType, title, color, fields) {
@@ -258,17 +274,32 @@ client.on('interactionCreate', async interaction => {
       if (commandName === 'help') {
         const helpEmbed = new EmbedBuilder()
           .setColor(0xE74C3C)
-          .setTitle('🤖 دليل وقائمة أوامر بوت Boxtar الشاملة')
-          .setDescription('أهلاً بك يا عمرو! إليك قائمة بجميع الأوامر والأنظمة المتاحة في البوت:')
+          .setTitle('🤖 دليل وقائمة أوامر ونقاط القوة في بوت Boxtar الشاملة')
+          .setDescription('أهلاً بك يا عمرو! إليك شرح تفصيلي لجميع الأوامر والميزات المتاحة في البوت:')
           .addFields(
             { 
+              name: '⭐ نظام اللفلات والتفاعل (Levels & XP)', 
+              value: '`/level-setup` (تفعيل/إيقاف، تحديد XP الرسائل، تفعيل رومات الصوت)\n`/level` أو `?level` (عرض بطاقة اللفل المصورة وسرعة التقدم)\n`/top` (عرض قائمة الترتيب لأعلى 10 أعضاء مع خيارات الفترة: يوم، أسبوع، شهر، الكل)', 
+              inline: false 
+            },
+            { 
               name: '📂 نظام التقديمات المطوّر (4 تقديمات)', 
-              value: '`/تقديم` : إعداد اسم التقديم والبانر، تعيين الـ 5 أسئلة في زر منفصل، تحديد رتبة القبول، وتحديد روم استقبال الطلبات مع أزرار الموافقة والرفض.', 
+              value: '`/تقديم` : إعداد اسم التقديم والبانر، تعيين الـ 5 أسئلة، رتبة القبول، وروم استقبال الطلبات مع أزرار الموافقة والرفض الفورية.', 
               inline: false 
             },
             { 
               name: '⛓️ نظام السجن المتكامل والمحدث', 
-              value: '`/jail-setup`, `/jail`, `/unjail`', 
+              value: '`/jail-setup` (تحديد رتبة السجين والسجان ورومات السجل)\n`/jail` و `/unjail` (سجن وإفراج الأعضاء مع حفظ الرتب السابقة تلقائياً)', 
+              inline: false 
+            },
+            { 
+              name: '🛡️ الحماية، الكلمات المحظورة، والأذكار', 
+              value: '`/bad-words` (إدارة الكلمات الممنوعة وعقوباتها)\n`/protection` (حماية السبام والروابط)\n`/azkar-setup` و `/azkar` (نظام الأذكار التلقائية)', 
+              inline: false 
+            },
+            { 
+              name: '⚡ الأوامر الإدارية والاختصارات', 
+              value: '`/shortcut` (إنشاء اختصارات للأوامر الإدارية مثل `!k` أو `!b`)\n`/admin-setup`, `/ban`, `/kick`, `/timeout`, `/warn`, `/clear`, `/lock`, `/unlock`', 
               inline: false 
             }
           )
@@ -276,6 +307,47 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
 
         return interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+      }
+
+      if (commandName === 'top') {
+        await interaction.deferReply();
+        const period = options.getString('الفترة') || 'all';
+
+        // تصفية وترتيب مستخدمي السيرفر بناءً على النقاط
+        const guildUsers = Array.from(userLevels.entries())
+          .filter(([key]) => key.startsWith(`${guild.id}_`))
+          .map(([key, data]) => {
+            const userId = key.split('_')[1];
+            return { userId, ...data };
+          })
+          .sort((a, b) => b.xp - a.xp)
+          .slice(0, 10);
+
+        if (guildUsers.length === 0) {
+          return interaction.editReply({ content: '❌ لا توجد أي بيانات لفلات مسجلة في هذا السيرفر حتى الآن.' });
+        }
+
+        const periodNames = {
+          day: 'آخر يوم 📅',
+          week: 'آخر أسبوع 📊',
+          month: 'آخر شهر 🗓️',
+          all: 'الكل (دائم) 🏆'
+        };
+
+        let descText = `🏆 **أبرز 10 أعضاء تفاعلاً في السيرفر**\n*الفترة الزمنية: ${periodNames[period]}*\n\n`;
+        
+        guildUsers.forEach((u, index) => {
+          const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `\`#${index + 1}\``;
+          descText += `${medal} <@${u.userId}> ➔ المستوى: **${u.level}** | الـ XP: **${u.xp}**\n`;
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle('📊 لوحة المتصدرين (Top Leaderboard)')
+          .setDescription(descText)
+          .setColor(0xE74C3C)
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
       }
 
       if (commandName === 'bad-words') {
@@ -324,7 +396,7 @@ client.on('interactionCreate', async interaction => {
 
         const embed = new EmbedBuilder()
           .setTitle('🛡️ لوحة نظام الحماية الفعّال')
-          .setDescription('تحكم بحماية السيرفر عبر الأزرار أدناه:')
+          .setDescription('تحقّق وتحكم بحماية السيرفر عبر الأزرار أدناه:')
           .addFields(
             { name: '🚫 حماية الروابط:', value: currentProt.antiLinks ? '✅ **مفعل**' : '❌ **متوقف**', inline: true },
             { name: '⚡ حماية السبام:', value: currentProt.antiSpam ? '✅ **مفعل**' : '❌ **متوقف**', inline: true }
@@ -524,18 +596,31 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
       }
 
+      // ==========================================
+      // لوحة إعدادات اللفلات المحدثة مع زر التفعيل/الإيقاف الديناميكي
+      // ==========================================
       if (commandName === 'level-setup') {
         await interaction.deferReply({ ephemeral: true });
+        const currentLvlSet = levelSettings.get(guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        
+        const toggleBtnLabel = currentLvlSet.enabled ? 'إيقاف نظام اللفلات 🛑' : 'تفعيل نظام اللفلات ✅';
+        const toggleBtnStyle = currentLvlSet.enabled ? ButtonStyle.Danger : ButtonStyle.Success;
+
         const embed = new EmbedBuilder()
-          .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels)')
-          .setDescription('اختر الإجراء لضبط التفاعل واللفلات في السيرفر:')
+          .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**`)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('lvl_set_formula').setLabel('تحديد الـ XP الأساسي').setEmoji('📈').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId('lvl_set_reward').setLabel('ربط لفل برتبة').setEmoji('🎁').setStyle(ButtonStyle.Success)
+          new ButtonBuilder().setCustomId('lvl_toggle_system').setLabel(toggleBtnLabel).setStyle(toggleBtnStyle),
+          new ButtonBuilder().setCustomId('lvl_set_xp_amount').setLabel('تحديد XP الرسالة الواحدة ✍️').setStyle(ButtonStyle.Primary)
         );
-        return interaction.editReply({ embeds: [embed], components: [row1] });
+
+        const row2 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.editReply({ embeds: [embed], components: [row1, row2] });
       }
 
       if (commandName === 'level') {
@@ -664,9 +749,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply({ embeds: [embed], components: [row1] });
       }
 
-      // ==========================================
-      // لوحة إعدادات التقديمات الأربعة المحدثة
-      // ==========================================
       if (commandName === 'تقديم') {
         await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder()
@@ -844,6 +926,73 @@ client.on('interactionCreate', async interaction => {
     if (interaction.isButton()) {
       const id = interaction.customId;
 
+      // ==========================================
+      // أزرار التحكم في إعدادات اللفلات
+      // ==========================================
+      if (id === 'lvl_toggle_system') {
+        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        currentLvlSet.enabled = !currentLvlSet.enabled;
+        levelSettings.set(interaction.guild.id, currentLvlSet);
+
+        const toggleBtnLabel = currentLvlSet.enabled ? 'إيقاف نظام اللفلات 🛑' : 'تفعيل نظام اللفلات ✅';
+        const toggleBtnStyle = currentLvlSet.enabled ? ButtonStyle.Danger : ButtonStyle.Success;
+
+        const embed = new EmbedBuilder()
+          .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**`)
+          .setColor(0xE74C3C);
+
+        const row1 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('lvl_toggle_system').setLabel(toggleBtnLabel).setStyle(toggleBtnStyle),
+          new ButtonBuilder().setCustomId('lvl_set_xp_amount').setLabel('تحديد XP الرسالة الواحدة ✍️').setStyle(ButtonStyle.Primary)
+        );
+
+        const row2 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
+      }
+
+      if (id === 'lvl_set_xp_amount') {
+        const modal = new ModalBuilder().setCustomId('lvl_modal_set_xp').setTitle('تحديد مقدار الـ XP للرسالة الواحدة');
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('xp_amount_input')
+              .setLabel('اكتب عدد نقاط XP (مثلاً: 15 أو 20)')
+              .setStyle(TextInputStyle.Short)
+              .setRequired(true)
+          )
+        );
+        return await interaction.showModal(modal);
+      }
+
+      if (id === 'lvl_toggle_voice') {
+        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        currentLvlSet.voiceXpEnabled = !currentLvlSet.voiceXpEnabled;
+        levelSettings.set(interaction.guild.id, currentLvlSet);
+
+        const toggleBtnLabel = currentLvlSet.enabled ? 'إيقاف نظام اللفلات 🛑' : 'تفعيل نظام اللفلات ✅';
+        const toggleBtnStyle = currentLvlSet.enabled ? ButtonStyle.Danger : ButtonStyle.Success;
+
+        const embed = new EmbedBuilder()
+          .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**`)
+          .setColor(0xE74C3C);
+
+        const row1 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('lvl_toggle_system').setLabel(toggleBtnLabel).setStyle(toggleBtnStyle),
+          new ButtonBuilder().setCustomId('lvl_set_xp_amount').setLabel('تحديد XP الرسالة الواحدة ✍️').setStyle(ButtonStyle.Primary)
+        );
+
+        const row2 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('lvl_toggle_voice').setLabel(currentLvlSet.voiceXpEnabled ? 'إيقاف تفاعل الصوت 🎙️' : 'تشغيل تفاعل الصوت 🎙️').setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
+      }
+
       if (id === 'bw_add_word') {
         const modal = new ModalBuilder().setCustomId('bw_modal_add').setTitle('إضافة كلمة ممنوعة جديدة');
         modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('word_input').setLabel('اكتب الكلمة المراد حظرها').setStyle(TextInputStyle.Short).setRequired(true)));
@@ -969,9 +1118,6 @@ client.on('interactionCreate', async interaction => {
         await interaction.channel.delete().catch(() => {});
       }
 
-      // ==========================================
-      // أزرار لوحة تحكم التقديمات (1 إلى 4)
-      // ==========================================
       if (id.startsWith('app_cfg_')) {
         const appNum = id.replace('app_cfg_', '');
         const embed = new EmbedBuilder()
@@ -996,7 +1142,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ embeds: [embed], components: [row1, row2, row3], ephemeral: true });
       }
 
-      // زر إعداد اسم التقديم ورابط البانر
       if (id.startsWith('app_edit_name_banner_')) {
         const appNum = id.replace('app_edit_name_banner_', '');
         const modal = new ModalBuilder().setCustomId(`save_name_banner_${appNum}`).setTitle(`إعداد اسم وبانر تقديم (${appNum})`);
@@ -1008,7 +1153,6 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
-      // زر إعداد الـ 5 أسئلة كاملة
       if (id.startsWith('app_edit_5_questions_')) {
         const appNum = id.replace('app_edit_5_questions_', '');
         const modal = new ModalBuilder().setCustomId(`save_5_questions_${appNum}`).setTitle(`إعداد الأسئلة الخمسة لتقديم (${appNum})`);
@@ -1074,12 +1218,9 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
-      // ==========================================
-      // معالجة أزرار (أوافق / أرفق) للتقديمات
-      // ==========================================
       if (id.startsWith('app_accept_') || id.startsWith('app_reject_')) {
         const isAccept = id.startsWith('app_accept_');
-        const parts = id.split('_'); // ['app', 'accept', appNum, userId]
+        const parts = id.split('_'); 
         const appNum = parts[2];
         const targetUserId = parts[3];
 
@@ -1124,6 +1265,17 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'lvl_modal_set_xp') {
+        const val = parseInt(interaction.fields.getTextInputValue('xp_amount_input'));
+        if (isNaN(val) || val <= 0) return interaction.reply({ content: '❌ يرجى إدخال رقم صحيح أكبر من صفر.', ephemeral: true });
+
+        let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
+        currentLvlSet.xpPerMessage = val;
+        levelSettings.set(interaction.guild.id, currentLvlSet);
+
+        return interaction.reply({ content: `✅ تم تحديث نقاط XP الرسالة الواحدة لتصبح **${val} XP**.`, ephemeral: true });
+      }
+
       if (interaction.customId === 'bw_modal_add') {
         const newWord = interaction.fields.getTextInputValue('word_input').trim().toLowerCase();
         let wordsSet = badWordsDB.get(interaction.guild.id) || new Set();
@@ -1181,7 +1333,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `✅ تم إنشاء تذكرتك: ${ticketChannel}`, ephemeral: true });
       }
 
-      // حفظ اسم التقديم والبانر
       if (interaction.customId.startsWith('save_name_banner_')) {
         const appNum = interaction.customId.replace('save_name_banner_', '');
         const key = `${interaction.guild.id}_${appNum}`;
@@ -1194,7 +1345,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ تم حفظ اسم التقديم ورابط البانر بنجاح!', ephemeral: true });
       }
 
-      // حفظ الـ 5 أسئلة كاملة
       if (interaction.customId.startsWith('save_5_questions_')) {
         const appNum = interaction.customId.replace('save_5_questions_', '');
         const key = `${interaction.guild.id}_${appNum}`;
@@ -1210,7 +1360,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ تم حفظ الأسئلة الخمسة للتقديم بنجاح!', ephemeral: true });
       }
 
-      // معالجة تقديم العضو وإرسال الإجابات الـ 5 إلى الروم المحددة مع أزرار (أوافق / أرفق)
       if (interaction.customId.startsWith('submit_apply_modal_')) {
         const appNum = interaction.customId.replace('submit_apply_modal_', '');
         const key = `${interaction.guild.id}_${appNum}`;
@@ -1254,9 +1403,94 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
+// ==========================================
+// نظام تتبع تفاعل الأعضاء (الرسائل + الاختصار + الصوت)
+// ==========================================
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
+  // دعم الاختصار البردعي ?level
+  if (message.content.startsWith('?level')) {
+    const targetUser = message.mentions.users.first() || message.author;
+    const key = `${message.guild.id}_${targetUser.id}`;
+    const userData = userLevels.get(key) || { xp: 0, level: 0 };
+    const nextLevelXp = (userData.level + 1) * 200;
+
+    try {
+      const canvas = createCanvas(800, 260);
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#0f0f12';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, canvas.width, canvas.height, 20);
+      ctx.fill();
+
+      ctx.fillStyle = '#1e1e24';
+      ctx.beginPath();
+      ctx.roundRect(240, 175, 510, 28, 14);
+      ctx.fill();
+
+      const percentage = Math.min(userData.xp / nextLevelXp, 1);
+      const progressWidth = Math.max(percentage * 510, 28);
+      
+      const redGradient = ctx.createLinearGradient(240, 0, 750, 0);
+      redGradient.addColorStop(0, '#ff2a2a');
+      redGradient.addColorStop(1, '#990000');
+      
+      ctx.fillStyle = redGradient;
+      ctx.beginPath();
+      ctx.roundRect(240, 175, progressWidth, 28, 14);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText(targetUser.username, 240, 65);
+
+      ctx.fillStyle = '#ff4d4d';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText(`LEVEL: ${userData.level}`, 240, 110);
+
+      ctx.fillStyle = '#cccccc';
+      ctx.font = '18px sans-serif';
+      ctx.fillText(`XP: ${userData.xp} / ${nextLevelXp}`, 400, 110);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(120, 130, 72, 0, Math.PI * 2, true);
+      ctx.closePath();
+      ctx.clip();
+
+      const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 256 });
+      const avatar = await loadImage(avatarURL);
+      ctx.drawImage(avatar, 48, 58, 144, 144);
+      ctx.restore();
+
+      const attachment = { attachment: canvas.toBuffer('image/png'), name: 'rank-card.png' };
+      return message.reply({ files: [attachment] });
+    } catch (err) {
+      console.error(err);
+      return message.reply({ content: `❌ حدث خطأ أثناء إنشاء بطاقة اللفل.` });
+    }
+  }
+
+  // نظام احتساب XP الرسائل إذا كان النظام مفعلاً
+  const lvlSet = levelSettings.get(message.guild.id);
+  if (lvlSet && lvlSet.enabled) {
+    const key = `${message.guild.id}_${message.author.id}`;
+    let userData = userLevels.get(key) || { xp: 0, level: 0 };
+    
+    userData.xp += (lvlSet.xpPerMessage || 15);
+    const requiredXp = (userData.level + 1) * 200;
+
+    if (userData.xp >= requiredXp) {
+      userData.level += 1;
+      userData.xp = 0;
+      message.channel.send(`🎉 مبروك يا ${message.author}! لقد صعدت إلى المستوى **Level ${userData.level}**! 🚀`).catch(() => {});
+    }
+    userLevels.set(key, userData);
+  }
+
+  // فحص الكلمات المحظورة
   const wordsSet = badWordsDB.get(message.guild.id);
   if (wordsSet && wordsSet.size > 0 && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
     const contentLower = message.content.toLowerCase();
