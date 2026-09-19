@@ -190,7 +190,8 @@ const commands = [
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو').setRequired(true))
     .addStringOption(opt => opt.setName('السبب').setDescription('سبب رفع الكتم').setRequired(true)),
   
-  newSlashCommandBuilder()
+  // تم تصحيح الخطأ الإملائي هنا (إزالة حرف الحاء العربي واستبداله بـ SlashCommandBuilder الصحيحة)
+  new SlashCommandBuilder()
     .setName('warn')
     .setDescription('إرسال تحذير إداري لعضو')
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو المراد تحذيره').setRequired(true))
@@ -313,7 +314,6 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply();
         const period = options.getString('الفترة') || 'all';
 
-        // تصفية وترتيب مستخدمي السيرفر بناءً على النقاط
         const guildUsers = Array.from(userLevels.entries())
           .filter(([key]) => key.startsWith(`${guild.id}_`))
           .map(([key, data]) => {
@@ -596,9 +596,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
       }
 
-      // ==========================================
-      // لوحة إعدادات اللفلات المحدثة مع زر التفعيل/الإيقاف الديناميكي
-      // ==========================================
       if (commandName === 'level-setup') {
         await interaction.deferReply({ ephemeral: true });
         const currentLvlSet = levelSettings.get(guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
@@ -926,9 +923,6 @@ client.on('interactionCreate', async interaction => {
     if (interaction.isButton()) {
       const id = interaction.customId;
 
-      // ==========================================
-      // أزرار التحكم في إعدادات اللفلات
-      // ==========================================
       if (id === 'lvl_toggle_system') {
         let currentLvlSet = levelSettings.get(interaction.guild.id) || { enabled: false, xpPerMessage: 15, voiceXpEnabled: true };
         currentLvlSet.enabled = !currentLvlSet.enabled;
@@ -1403,13 +1397,9 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// ==========================================
-// نظام تتبع تفاعل الأعضاء (الرسائل + الاختصار + الصوت)
-// ==========================================
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
-  // دعم الاختصار البردعي ?level
   if (message.content.startsWith('?level')) {
     const targetUser = message.mentions.users.first() || message.author;
     const key = `${message.guild.id}_${targetUser.id}`;
@@ -1473,7 +1463,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // نظام احتساب XP الرسائل إذا كان النظام مفعلاً
   const lvlSet = levelSettings.get(message.guild.id);
   if (lvlSet && lvlSet.enabled) {
     const key = `${message.guild.id}_${message.author.id}`;
@@ -1490,7 +1479,6 @@ client.on('messageCreate', async message => {
     userLevels.set(key, userData);
   }
 
-  // فحص الكلمات المحظورة
   const wordsSet = badWordsDB.get(message.guild.id);
   if (wordsSet && wordsSet.size > 0 && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
     const contentLower = message.content.toLowerCase();
