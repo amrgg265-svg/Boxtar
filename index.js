@@ -1632,7 +1632,7 @@ client.on('interactionCreate', async interaction => {
 });
 
 // تسجيل الأوامر عند تشغيل البوت
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}! 🤖`);
@@ -1647,4 +1647,4 @@ client.once('ready', async () => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.TOKEN);
