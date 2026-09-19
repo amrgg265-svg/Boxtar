@@ -381,7 +381,7 @@ client.on('interactionCreate', async interaction => {
         const helpEmbed = new EmbedBuilder()
           .setColor(0xE74C3C)
           .setTitle('🤖 دليل وقائمة أوامر ونقاط القوة في بوت Boxtar الشاملة')
-          .setDescription('أهلاً بك يا عمرو! إليك شرح تفصيلي لجميع أوامر والميزات المتاحة في البوت:')
+          .setDescription('أهلاً بك يا عمرو! إليك شرح تفصيلي لجميع الأوامر والميزات المتاحة في البوت:')
           .addFields(
             { 
               name: '⭐ نظام اللفلات والتفاعل (Levels & XP)', 
@@ -958,17 +958,26 @@ client.on('interactionCreate', async interaction => {
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('tk_edit_title').setLabel('تعديل عنوان البانل ✏️').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('tk_set_color').setLabel('تغيير لون البانل 🎨').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('tk_edit_button').setLabel('تعديل زر فتح التكت 🔘').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('tk_advanced_settings').setLabel('الإعدادات المتقدمة ⚙️').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId('tk_set_color').setLabel('تغيير لون البانل 🎨').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('tk_set_support_role').setLabel('تحديد رتبة الدعم 🛡️').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('tk_remove_support_role').setLabel('إزالة رتبة الدعم ❌').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('tk_set_category').setLabel('تحديد category 📁').setStyle(ButtonStyle.Secondary)
         );
 
         const row2 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('tk_toggle_reason').setLabel(config.requireReason ? 'إيقاف السبب 🔴' : 'تفعيل السبب 🟢').setStyle(config.requireReason ? ButtonStyle.Danger : ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('tk_toggle_rating').setLabel(config.ratingEnabled ? 'إيقاف التقييمات 🔴' : 'تفعيل التقييمات 🟢').setStyle(config.ratingEnabled ? ButtonStyle.Danger : ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('tk_set_rating_room').setLabel('تحديد روم التقييمات ⭐️').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('tk_set_banner').setLabel('تحديد صورة البانر 🖼️').setStyle(ButtonStyle.Secondary)
+        );
+
+        const row3 = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('tk_edit_button').setLabel('تعديل الزر ✏️').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('tk_set_welcome_msg').setLabel('رسالة فتح التكت 💬').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId('tk_send_embed').setLabel('نشر اللوحة 🚀').setStyle(ButtonStyle.Danger)
         );
 
-        return interaction.editReply({ embeds: [embed], components: [row1, row2] });
+        return interaction.editReply({ embeds: [embed], components: [row1, row2, row3] });
       }
 
       if (commandName === 'تقديم') {
@@ -1190,17 +1199,10 @@ client.on('interactionCreate', async interaction => {
         let config = ticketConfigs.get(interaction.guild.id) || {};
         config.colorName = colorVal;
         
-        // أقصى عدد ألوان ديسكورد المسموحة (ملفات Hex مخصصة)
-        if (colorVal === 'بنفسجي داكن 💜') config.hexColor = 0x5865F2;
-        else if (colorVal === 'أحمر قاني ❤️') config.hexColor = 0xED4245;
-        else if (colorVal === 'أزرق سماوي 💙') config.hexColor = 0x3498DB;
-        else if (colorVal === 'أخضر زمردي 💚') config.hexColor = 0x2ECC71;
-        else if (colorVal === 'أصفر ذهبي 💛') config.hexColor = 0xFEE75C;
-        else if (colorVal === 'برتقالي 🧡') config.hexColor = 0xE67E22;
-        else if (colorVal === 'وردي فاقع 🩷') config.hexColor = 0xEB459E;
-        else if (colorVal === 'تركواز 🩵') config.hexColor = 0x1ABC9C;
-        else if (colorVal === 'أبيض 🤍') config.hexColor = 0xFFFFFF;
-        else if (colorVal === 'أسود 🖤') config.hexColor = 0x23272A;
+        if (colorVal === 'بنفسجي 💜') config.hexColor = 0x9B59B6;
+        else if (colorVal === 'احمر ❤️') config.hexColor = 0xE74C3C;
+        else if (colorVal === 'ازرق 💙') config.hexColor = 0x3498DB;
+        else if (colorVal === 'اخضر 💚') config.hexColor = 0x2ECC71;
         else config.hexColor = 0xE74C3C;
 
         ticketConfigs.set(interaction.guild.id, config);
@@ -1381,58 +1383,19 @@ client.on('interactionCreate', async interaction => {
       }
 
       // ==========================================
-      // أزرار وإعدادات التذاكر الجديدة المضافة والمعدلة
+      // أزرار وإعدادات التذاكر الجديدة المضافة
       // ==========================================
-      
-      // زر فتح قائمة الإعدادات المتقدمة
-      if (id === 'tk_advanced_settings') {
-        const config = ticketConfigs.get(interaction.guild.id) || {};
-        const embed = new EmbedBuilder()
-          .setTitle('⚙️ لوحة الإعدادات المتقدمة للتذاكر')
-          .setDescription('تحكم بكافة الإضافات الإضافية والتحكم التلقائي من هنا:')
-          .setColor(0xE74C3C);
-
-        const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('tk_set_support_role').setLabel('تحديد رتبة الدعم 🛡️').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('tk_remove_support_role').setLabel('إزالة رتبة الدعم ❌').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId('tk_set_category').setLabel('تحديد category 📁').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('tk_set_banner').setLabel('تحديد صورة البانر 🖼️').setStyle(ButtonStyle.Primary)
-        );
-
-        const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('tk_toggle_reason').setLabel(config.requireReason ? 'إيقاف السبب 🔴' : 'تفعيل السبب 🟢').setStyle(config.requireReason ? ButtonStyle.Danger : ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('tk_toggle_rating').setLabel(config.ratingEnabled ? 'إيقاف التقييمات 🔴' : 'تفعيل التقييمات 🟢').setStyle(config.ratingEnabled ? ButtonStyle.Danger : ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('tk_set_rating_room').setLabel('تحديد روم التقييمات ⭐️').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('tk_set_welcome_msg').setLabel('رسالة فتح التكت 💬').setStyle(ButtonStyle.Success)
-        );
-
-        return interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
-      }
-
-      // زر تعديل عنوان البانل
-      if (id === 'tk_edit_title') {
-        const modal = new ModalBuilder().setCustomId('tk_modal_edit_title').setTitle('تعديل عنوان بانل التكت');
-        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('tk_title_input').setLabel('عنوان البانل الجديد').setStyle(TextInputStyle.Short).setRequired(true)));
-        return await interaction.showModal(modal);
-      }
-
       if (id === 'tk_set_color') {
         const colorMenu = new StringSelectMenuBuilder()
           .setCustomId('tk_color_select_menu')
-          .setPlaceholder('اختر لون بانل التكت (أقصى عدد ألوان متاح)...')
+          .setPlaceholder('اختر لون بانل التكت...')
           .addOptions(
-            { label: 'بنفسجي داكن 💜', value: 'بنفسجي داكن 💜' },
-            { label: 'أحمر قاني ❤️', value: 'أحمر قاني ❤️' },
-            { label: 'أزرق سماوي 💙', value: 'أزرق سماوي 💙' },
-            { label: 'أخضر زمردي 💚', value: 'أخضر زمردي 💚' },
-            { label: 'أصفر ذهبي 💛', value: 'أصفر ذهبي 💛' },
-            { label: 'برتقالي 🧡', value: 'برتقالي 🧡' },
-            { label: 'وردي فاقع 🩷', value: 'وردي فاقع 🩷' },
-            { label: 'تركواز 🩵', value: 'تركواز 🩵' },
-            { label: 'أبيض 🤍', value: 'أبيض 🤍' },
-            { label: 'أسود 🖤', value: 'أسود 🖤' }
+            { label: 'بنفسجي 💜', value: 'بنفسجي 💜' },
+            { label: 'احمر ❤️', value: 'احمر ❤️' },
+            { label: 'ازرق 💙', value: 'ازرق 💙' },
+            { label: 'اخضر 💚', value: 'اخضر 💚' }
           );
-        return interaction.reply({ content: '🎨 اختر لون الخط الجانبي للبانل من القائمة أدناه:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true });
+        return interaction.reply({ content: '🎨 اختر لون بانل التكت من القائمة أدناه:', components: [new ActionRowBuilder().addComponents(colorMenu)], ephemeral: true });
       }
 
       if (id === 'tk_set_support_role') {
@@ -1477,12 +1440,11 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
-      // تعديل زر فتح التكت (أولاً لون الزر، وثانياً اسم الزر)
       if (id === 'tk_edit_button') {
-        const modal = new ModalBuilder().setCustomId('tk_modal_edit_button').setTitle('تعديل زر فتح التكت');
+        const modal = new ModalBuilder().setCustomId('tk_modal_edit_button').setTitle('تعديل اسم ولون زر فتح التكت');
         modal.addComponents(
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_color_input').setLabel('1. اختر لون الزر (danger, primary, success, secondary)').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_name_input').setLabel('2. اسم زر فتح التذكرة').setStyle(TextInputStyle.Short).setRequired(true))
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_name_input').setLabel('اسم زر فتح التذكرة').setStyle(TextInputStyle.Short).setRequired(true)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_color_input').setLabel('لون الزر (danger, primary, success, secondary)').setStyle(TextInputStyle.Short).setRequired(true))
         );
         return await interaction.showModal(modal);
       }
@@ -1794,12 +1756,9 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: `❌ الاختصار غير موجود.`, ephemeral: true });
       }
 
-      if (interaction.customId === 'tk_modal_edit_title') {
-        const titleVal = interaction.fields.getTextInputValue('tk_title_input');
-        let config = ticketConfigs.get(interaction.guild.id) || {};
-        config.title = titleVal;
-        ticketConfigs.set(interaction.guild.id, config);
-        return interaction.reply({ content: `✅ تم تحديث عنوان البانل إلى: **${titleVal}**`, ephemeral: true });
+      if (interaction.customId === 'save_ticket_panel') {
+        ticketData.set(interaction.guild.id, { title: interaction.fields.getTextInputValue('tk_title'), desc: interaction.fields.getTextInputValue('tk_desc') });
+        return interaction.reply({ content: '✨ تم حفظ بيانات التذكرة بنجاح!', ephemeral: true });
       }
 
       if (interaction.customId === 'ticket_reason_modal') {
@@ -1812,28 +1771,120 @@ client.on('interactionCreate', async interaction => {
         let config = ticketConfigs.get(interaction.guild.id) || {};
         config.bannerUrl = url;
         ticketConfigs.set(interaction.guild.id, config);
-        return interaction.reply({ content: '✅ تم حفظ رابط البانر بنجاح!', ephemeral: true });
+        return interaction.reply({ content: '✅ تم حفظ صورة البانر بنجاح!', ephemeral: true });
       }
 
-      // حفظ تعديل الزر (أولاً اللون، وثانياً الاسم)
       if (interaction.customId === 'tk_modal_edit_button') {
-        const colorInput = interaction.fields.getTextInputValue('btn_color_input').trim().toLowerCase();
-        const nameInput = interaction.fields.getTextInputValue('btn_name_input');
-        
+        const name = interaction.fields.getTextInputValue('btn_name_input');
+        const style = interaction.fields.getTextInputValue('btn_color_input').toLowerCase();
         let config = ticketConfigs.get(interaction.guild.id) || {};
-        config.buttonName = nameInput;
-        config.buttonStyle = colorInput;
+        config.buttonName = name;
+        config.buttonStyle = style;
         ticketConfigs.set(interaction.guild.id, config);
-
-        return interaction.reply({ content: `✅ تم تعديل زر فتح التكت بنجاح!\n- **لون الزر:** ${colorInput}\n- **اسم الزر:** ${nameInput}`, ephemeral: true });
+        return interaction.reply({ content: `✅ تم تعديل الزر إلى: **${name}** باللون **${style}**`, ephemeral: true });
       }
 
       if (interaction.customId === 'tk_modal_welcome_msg') {
         const msg = interaction.fields.getTextInputValue('welcome_text_input');
         let config = ticketConfigs.get(interaction.guild.id) || {};
-        config.welcomeMsg = msg;
+        config.welcomeMessage = msg;
         ticketConfigs.set(interaction.guild.id, config);
-        return interaction.reply({ content: '✅ تم حفظ رسالة ترحيب فتح التكت بنجاح!', ephemeral: true });
+        return interaction.reply({ content: '✅ تم حفظ رسالة فتح التكت بنجاح!', ephemeral: true });
+      }
+
+      if (interaction.customId.startsWith('save_name_banner_')) {
+        const appNum = interaction.customId.replace('save_name_banner_', '');
+        const key = `${interaction.guild.id}_${appNum}`;
+        let existing = applicationsData.get(key) || {};
+
+        existing.name = interaction.fields.getTextInputValue('app_name');
+        existing.banner = interaction.fields.getTextInputValue('app_banner');
+        applicationsData.set(key, existing);
+
+        return interaction.reply({ content: '✅ تم حفظ اسم التقديم ورابط البانر بنجاح!', ephemeral: true });
+      }
+
+      if (interaction.customId.startsWith('save_5_questions_')) {
+        const appNum = interaction.customId.replace('save_5_questions_', '');
+        const key = `${interaction.guild.id}_${appNum}`;
+        let existing = applicationsData.get(key) || {};
+
+        existing.q1 = interaction.fields.getTextInputValue('q1_input');
+        existing.q2 = interaction.fields.getTextInputValue('q2_input');
+        existing.q3 = interaction.fields.getTextInputValue('q3_input');
+        existing.q4 = interaction.fields.getTextInputValue('q4_input');
+        existing.q5 = interaction.fields.getTextInputValue('q5_input');
+        applicationsData.set(key, existing);
+
+        return interaction.reply({ content: '✅ تم حفظ الأسئلة الخمسة للتقديم بنجاح!', ephemeral: true });
+      }
+
+      if (interaction.customId.startsWith('submit_apply_modal_')) {
+        const appNum = interaction.customId.replace('submit_apply_modal_', '');
+        const key = `${interaction.guild.id}_${appNum}`;
+        const data = applicationsData.get(key) || {};
+
+        const ans1 = interaction.fields.getTextInputValue('q_ans_1');
+        const ans2 = interaction.fields.getTextInputValue('q_ans_2');
+        const ans3 = interaction.fields.getTextInputValue('q_ans_3');
+        const ans4 = interaction.fields.getTextInputValue('q_ans_4');
+        const ans5 = interaction.fields.getTextInputValue('q_ans_5');
+
+        const embed = new EmbedBuilder()
+          .setTitle(`📥 طلب تقديم جديد: ${data.name || `تقديم (${appNum})`}`)
+          .setColor(0xE74C3C)
+          .addFields(
+            { name: '👤 المتقدم:', value: `${interaction.user} (${interaction.user.tag})`, inline: false },
+            { name: `📝 1. ${data.q1 || 'السؤال 1'}:`, value: `> ${ans1}`, inline: false },
+            { name: `📝 2. ${data.q2 || 'السؤال 2'}:`, value: `> ${ans2}`, inline: false },
+            { name: `📝 3. ${data.q3 || 'السؤال 3'}:`, value: `> ${ans3}`, inline: false },
+            { name: `📝 4. ${data.q4 || 'السؤال 4'}:`, value: `> ${ans4}`, inline: false },
+            { name: `📝 5. ${data.q5 || 'السؤال 5'}:`, value: `> ${ans5}`, inline: false }
+          );
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`app_accept_${appNum}_${interaction.user.id}`).setLabel('قبول الطلب').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`app_app_reject_${appNum}_${interaction.user.id}`).setLabel('رفض الطلب').setStyle(ButtonStyle.Danger)
+        );
+
+        if (data.logChannelId) {
+          const logChan = interaction.guild.channels.cache.get(data.logChannelId);
+          if (logChan) {
+            await logChan.send({ embeds: [embed], components: [row] });
+          }
+        }
+
+        return interaction.reply({ content: '✅ تم إرسال إجاباتك بنجاح للإدارة، انتظر الرد قريباً!', ephemeral: true });
+      }
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId.startsWith('ticket_rate_')) {
+        const parts = interaction.customId.split('_');
+        const ownerId = parts[2];
+        const claimedById = parts[3];
+        const rating = interaction.values[0];
+
+        const config = ticketConfigs.get(interaction.guild.id) || {};
+        if (config.ratingChannelId) {
+          const rChan = interaction.guild.channels.cache.get(config.ratingChannelId);
+          if (rChan) {
+            const adminText = claimedById !== 'none' ? `<@${claimedById}>` : 'لم يتم الاستلام';
+            const rateEmbed = new EmbedBuilder()
+              .setTitle('⭐️ تقييم تذكرة جديد')
+              .addFields(
+                { name: '👤 العضو المقيم:', value: `<@${interaction.user.id}>`, inline: false },
+                { name: '🛡️ الإداري المسؤول:', value: adminText, inline: false },
+                { name: '⭐️ التقييم:', value: `${rating} من 5 نجوم ⭐️`, inline: false }
+              )
+              .setColor(0xE74C3C)
+              .setTimestamp();
+            rChan.send({ embeds: [rateEmbed] }).catch(() => {});
+          }
+        }
+
+        await interaction.reply({ content: `✅ شكراً لك على تقييمك (${rating} نجوم)! سيتم إغلاق التذكرة الآن.`, ephemeral: true });
+        setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
       }
     }
   } catch (err) {
@@ -1841,170 +1892,62 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
+// دالة مساعدة لإنشاء روم التذكرة والصلاحيات والأزرار المطلوبة
 async function createTicketChannel(interaction, reason) {
-  const guild = interaction.guild;
-  const config = ticketConfigs.get(guild.id) || {};
-  const categoryId = config.categoryId;
-  const supportRoleId = config.supportRoleId;
+  const config = ticketConfigs.get(interaction.guild.id) || {};
+  const categoryId = config.categoryId || null;
+  const supportRoleId = config.supportRoleId || null;
 
-  let permissionOverwrites = [
-    {
-      id: guild.id,
-      deny: [PermissionFlagsBits.ViewChannel]
-    },
-    {
-      id: interaction.user.id,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
-    }
+  // الصلاحيات: صاحب التذكرة والمستلم والإداريون يראون ويكتبون، باقي أعضاء السيرفر لا يرون شيئاً
+  const permissionOverwrites = [
+    { id: interaction.guild.id, denied: [PermissionFlagsBits.ViewChannel] },
+    { id: interaction.user.id, allowed: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
   ];
 
   if (supportRoleId) {
-    permissionOverwrites.push({
-      id: supportRoleId,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
-    });
+    permissionOverwrites.push({ id: supportRoleId, allowed: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
   }
 
-  const channelOptions = {
+  const ticketChannel = await interaction.guild.channels.create({
     name: `ticket-${interaction.user.username}`,
     type: ChannelType.GuildText,
+    parent: categoryId,
     permissionOverwrites: permissionOverwrites
-  };
-
-  if (categoryId) {
-    channelOptions.parent = categoryId;
-  }
-
-  const ticketChannel = await guild.channels.create(channelOptions);
-
-  activeTickets.set(ticketChannel.id, {
-    ownerId: interaction.user.id,
-    claimedBy: null,
-    reason: reason
   });
 
-  const welcomeText = config.welcomeMsg || `مرحباً بك ${interaction.user} في تذكرتك الخاصة.\nالسبب: **${reason}**\nيرجى انتظار رد فريق الدعم.`;
+  activeTickets.set(ticketChannel.id, { ownerId: interaction.user.id, claimedBy: null });
+
+  const welcomeText = config.welcomeMessage || 'يرجى انتظار مسؤولين التذكرة الرد عليك';
   const embed = new EmbedBuilder()
-    .setTitle(config.title || '🎫 نظام التذاكر والدعم الفني')
-    .setDescription(welcomeText)
-    .setColor(config.hexColor || 0xE74C3C)
-    .setTimestamp();
+    .setDescription(`> **${welcomeText}**\n\n**السبب**\n> \`${reason}\``)
+    .setColor(config.hexColor || 0xE74C3C);
+
+  if (config.bannerUrl && config.bannerUrl.startsWith('http')) {
+    embed.setImage(config.bannerUrl);
+  }
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket_claim').setLabel('استلام التكت ✋').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('ticket_call_support').setLabel('استدعاء الدعم 🟢').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق 🗑️').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId('ticket_claim').setLabel('استلام').setEmoji('✅').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('ticket_call_support').setLabel('طلب الدعم').setEmoji('🎙️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق').setEmoji('🗑️').setStyle(ButtonStyle.Secondary)
   );
 
-  await ticketChannel.send({ content: `${interaction.user} ${supportRoleId ? `<@&${supportRoleId}>` : ''}`, embeds: [embed], components: [row] });
-  return interaction.reply({ content: `✅ تم إنشاء تذكرتك بنجاح في الروم: ${ticketChannel}`, ephemeral: true });
+  const mentionString = supportRoleId ? `<@&${supportRoleId}> ${interaction.user}` : `${interaction.user}`;
+  await ticketChannel.send({ content: mentionString, embeds: [embed], components: [row] });
+  return interaction.reply({ content: `✅ تم إنشاء تذكرتك بنجاح: ${ticketChannel}`, ephemeral: true });
 }
 
-client.on('messageCreate', async message => {
-  if (message.author.bot || !message.guild) return;
-
-  // فحص نظام AFK
-  if (afkUsers.has(message.author.id)) {
-    afkUsers.delete(message.author.id);
-    message.reply(`Welcome back ${message.author}! I have removed your AFK status.`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
-  }
-
-  message.mentions.users.forEach(u => {
-    if (afkUsers.has(u.id)) {
-      const data = afkUsers.get(u.id);
-      message.reply(`💤 العضو ${u.username} في وضع الغياب (AFK). السبب: **${data.reason}**`);
-    }
-  });
-
-  // فحص الكلمات المحظورة
-  const wordsSet = badWordsDB.get(message.guild.id);
-  if (wordsSet && wordsSet.size > 0) {
-    const contentLower = message.content.toLowerCase();
-    let hasBadWord = false;
-    for (const w of wordsSet) {
-      if (contentLower.includes(w)) {
-        hasBadWord = true;
-        break;
-      }
-    }
-
-    if (hasBadWord && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      const punishment = badWordsPunishment.get(message.guild.id) || 'delete';
-      if (punishment === 'delete') {
-        await message.delete().catch(() => {});
-        return message.channel.send(`⚠️ ${message.author}، ممنوع استخدام هذه الكلمات هنا!`).then(m => setTimeout(() => m.delete().catch(() => {}), 4000));
-      } else if (punishment === 'timeout') {
-        await message.delete().catch(() => {});
-        await message.member.timeout(5 * 60 * 1000, 'استخدام كلمات محظورة').catch(() => {});
-        return message.channel.send(`⚠️ ${message.author}، تم كتمك 5 دقائق بسبب الكلمات المحظورة.`);
-      } else if (punishment === 'kick') {
-        await message.delete().catch(() => {});
-        await message.member.kick('استخدام كلمات محظورة').catch(() => {});
-      } else if (punishment === 'ban') {
-        await message.delete().catch(() => {});
-        await message.member.ban({ reason: 'استخدام كلمات محظورة' }).catch(() => {});
-      }
-      return;
-    }
-  }
-
-  // نظام الحماية (الروابط والسبام)
-  const prot = protectionSettings.get(message.guild.id);
-  if (prot && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    if (prot.antiLinks && (message.content.includes('http://') || message.content.includes('https://') || message.content.includes('discord.gg/'))) {
-      await message.delete().catch(() => {});
-      return message.channel.send(`🚫 ${message.author}، ممنوع إرسال الروابط في هذا السيرفر!`).then(m => setTimeout(() => m.delete().catch(() => {}), 4000));
-    }
-  }
-
-  // نظام اللفلات XP
-  const lvlSet = levelSettings.get(message.guild.id);
-  if (lvlSet && lvlSet.enabled) {
-    const key = `${message.guild.id}_${message.author.id}`;
-    let userData = userLevels.get(key) || { xp: 0, level: 0 };
-    userData.xp += (lvlSet.xpPerMessage || 15);
-
-    let nextXp = getRequiredXp(userData.level);
-    if (userData.xp >= nextXp) {
-      userData.xp -= nextXp;
-      userData.level += 1;
-      message.channel.send(`🎉 مبروك يا ${message.author}! لقد صعدت إلى المستوى **${userData.level}**! 🚀`).catch(() => {});
-    }
-    userLevels.set(key, userData);
-  }
-
-  // فحص الاختصارات الإدارية (مثل !b أو !k)
-  if (message.content.startsWith('!')) {
-    const args = message.content.slice(1).trim().split(/ +/);
-    const alias = args.shift().toLowerCase();
-    const key = `${message.guild.id}_${alias}`;
-
-    if (customShortcuts.has(key)) {
-      const origCmd = customShortcuts.get(key);
-      if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-
-      if (origCmd === 'clear' && args[0]) {
-        const amount = parseInt(args[0]);
-        if (!isNaN(amount)) {
-          await message.channel.bulkDelete(amount, true).catch(() => {});
-          return message.channel.send(`🧹 تم مسح **${amount}** رسالة عبر الاختصار.`);
-        }
-      }
-    }
-  }
-});
+// تسجيل الأوامر عند تشغيل البوت
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}!`);
-  
-  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+  console.log(`Logged in as ${client.user.tag}! 🤖`);
   try {
-    console.log('Started refreshing application (/) commands.');
     await rest.put(
       Routes.applicationCommands(client.user.id),
-      body = commands,
+      { body: commands }
     );
-    console.log('Successfully reloaded application (/) commands.');
+    console.log('Successfully registered application commands.');
   } catch (error) {
     console.error(error);
   }
