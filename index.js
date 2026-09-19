@@ -190,7 +190,6 @@ const commands = [
     .addUserOption(opt => opt.setName('العضو').setDescription('حدد العضو').setRequired(true))
     .addStringOption(opt => opt.setName('السبب').setDescription('سبب رفع الكتم').setRequired(true)),
   
-  // تم تصحيح الخطأ الإملائي هنا (إزالة حرف الحاء العربي واستبداله بـ SlashCommandBuilder الصحيحة)
   new SlashCommandBuilder()
     .setName('warn')
     .setDescription('إرسال تحذير إداري لعضو')
@@ -267,6 +266,11 @@ async function sendLog(guild, logType, title, color, fields) {
   await channel.send({ embeds: [logEmbed] }).catch(() => {});
 }
 
+// دالة حساب الـ XP المطلوب للفل التالي (يزيد بنسبة 20% لكل لفل بناءً على القاعدة الأساسية 200)
+function getRequiredXp(level) {
+  return Math.floor(200 * Math.pow(1.2, level));
+}
+
 client.on('interactionCreate', async interaction => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -280,7 +284,7 @@ client.on('interactionCreate', async interaction => {
           .addFields(
             { 
               name: '⭐ نظام اللفلات والتفاعل (Levels & XP)', 
-              value: '`/level-setup` (تفعيل/إيقاف، تحديد XP الرسائل، تفعيل رومات الصوت)\n`/level` أو `?level` (عرض بطاقة اللفل المصورة وسرعة التقدم)\n`/top` (عرض قائمة الترتيب لأعلى 10 أعضاء مع خيارات الفترة: يوم، أسبوع، شهر، الكل)', 
+              value: '`/level-setup` (تفعيل/إيقاف، تحديد XP الرسائل، تفعيل رومات الصوت)\n`/level` أو `?level` (عرض بطاقة اللفل المصورة وسرعة التقدم - مع زيادة 20% لكل لفل)\n`/top` (عرض قائمة الترتيب لأعلى 10 أعضاء مع خيارات الفترة: يوم، أسبوع، شهر، الكل)', 
               inline: false 
             },
             { 
@@ -605,7 +609,7 @@ client.on('interactionCreate', async interaction => {
 
         const embed = new EmbedBuilder()
           .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
-          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**`)
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n📈 *معلومة: متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
@@ -625,7 +629,7 @@ client.on('interactionCreate', async interaction => {
         const targetUser = options.getUser('العضو') || interaction.user;
         const key = `${guild.id}_${targetUser.id}`;
         const userData = userLevels.get(key) || { xp: 0, level: 0 };
-        const nextLevelXp = (userData.level + 1) * 200;
+        const nextLevelXp = getRequiredXp(userData.level);
 
         try {
           const canvas = createCanvas(800, 260);
@@ -933,7 +937,7 @@ client.on('interactionCreate', async interaction => {
 
         const embed = new EmbedBuilder()
           .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
-          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**`)
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n📈 *متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
@@ -972,7 +976,7 @@ client.on('interactionCreate', async interaction => {
 
         const embed = new EmbedBuilder()
           .setTitle('⭐ لوحة إعدادات نظام اللفلات (Levels & XP)')
-          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**`)
+          .setDescription(`حالة النظام الحالي: **${currentLvlSet.enabled ? '🟢 مفعل' : '🔴 متوقف'}**\nقيمة XP الرسالة الواحدة: **${currentLvlSet.xpPerMessage} XP**\nكسب XP من الرومات الصوتية: **${currentLvlSet.voiceXpEnabled ? '✅ مفعل' : '❌ متوقف'}**\n📈 *متطلبات الـ XP تزداد بنسبة 20% لكل لفل.*`)
           .setColor(0xE74C3C);
 
         const row1 = new ActionRowBuilder().addComponents(
@@ -1404,7 +1408,7 @@ client.on('messageCreate', async message => {
     const targetUser = message.mentions.users.first() || message.author;
     const key = `${message.guild.id}_${targetUser.id}`;
     const userData = userLevels.get(key) || { xp: 0, level: 0 };
-    const nextLevelXp = (userData.level + 1) * 200;
+    const nextLevelXp = getRequiredXp(userData.level);
 
     try {
       const canvas = createCanvas(800, 260);
@@ -1469,11 +1473,11 @@ client.on('messageCreate', async message => {
     let userData = userLevels.get(key) || { xp: 0, level: 0 };
     
     userData.xp += (lvlSet.xpPerMessage || 15);
-    const requiredXp = (userData.level + 1) * 200;
+    const requiredXp = getRequiredXp(userData.level);
 
     if (userData.xp >= requiredXp) {
       userData.level += 1;
-      userData.xp = 0;
+      userData.xp = 0; // إعادة تعيين الـ XP أو جعله يبدأ من الفائض (يمكنك جعله `= 0` أو الاحتفاظ بالباقي)
       message.channel.send(`🎉 مبروك يا ${message.author}! لقد صعدت إلى المستوى **Level ${userData.level}**! 🚀`).catch(() => {});
     }
     userLevels.set(key, userData);
