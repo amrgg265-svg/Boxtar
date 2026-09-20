@@ -1813,14 +1813,16 @@ client.on('interactionCreate', async interaction => {
       }
 
       // [التعديل هنا] حفظ اسم ولون زر فتح التكت بناءً على مدخلات المستخدم
-      if (interaction.customId === 'tk_modal_edit_button') {
+            if (interaction.customId === 'tk_modal_edit_button') {
         const btnName = interaction.fields.getTextInputValue('btn_name_input');
-        const btnColor = interaction.fields.getTextInputValue('btn_color_input').toLowerCase().trim();
+        const btnColor = interaction.fields.getTextInputValue('btn_color_input').toLowerCase();
+        
         let config = ticketConfigs.get(interaction.guild.id) || {};
         config.buttonName = btnName;
         config.buttonStyle = btnColor;
         ticketConfigs.set(interaction.guild.id, config);
-        return interaction.reply({ content: `✅ تم تعديل زر فتح التكت بنجاح!\nالاسم: **${btnName}**\nاللون: **${btnColor}**`, ephemeral: true });
+
+        return interaction.reply({ content: `✅ تم تحديث اسم الزر إلى (**${btnName}**) ولونه إلى (**${btnColor}**) بنجاح!`, ephemeral: true });
       }
 
       if (interaction.customId === 'tk_modal_welcome_msg') {
