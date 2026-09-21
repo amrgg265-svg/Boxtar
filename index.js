@@ -31,6 +31,7 @@ const {
   ChannelSelectMenuBuilder,
   RoleSelectMenuBuilder,
   StringSelectMenuBuilder,
+  LabelBuilder,
   ChannelType,
   ButtonBuilder,
   ButtonStyle,
