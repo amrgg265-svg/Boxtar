@@ -1545,47 +1545,145 @@ client.on('interactionCreate', async interaction => {
 
       // زر استلام التكت
       if (id === 'ticket_claim') {
-        const tInfo = activeTickets.get(interaction.channel.id);
-        if (!tInfo) return interaction.reply({ content: '❌ هذه التذكرة غير مسجلة.', ephemeral: true });
-        if (tInfo.claimedBy) return interaction.reply({ content: `⚠️ تم استلام هذه التذكرة مسبقاً بواسطة <@${tInfo.claimedBy}>`, ephemeral: true });
+  const tInfo = activeTickets.get(interaction.channel.id);
 
-        const config = ticketConfigs.get(interaction.guild.id) || {};
-        const supportRoleId = config.supportRoleId;
+  if (!tInfo) {
+    return interaction.reply({
+      content: '❌ هذه التذكرة غير مسجلة.',
+      ephemeral: true
+    });
+  }
 
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator) && (!supportRoleId || !interaction.member.roles.cache.has(supportRoleId))) {
-          return interaction.reply({ content: '❌ عذراً، أزرار الإدارة مخصصة لفريق الدعم فقط!', ephemeral: true });
-        }
+  // منع صاحب التذكرة من استلام تذكرته
+  if (interaction.user.id === tInfo.ownerId) {
+    return interaction.reply({
+      content: '❌ لا يمكنك استلام التذكرة التي قمت بفتحها.',
+      ephemeral: true
+    });
+  }
 
-        tInfo.claimedBy = interaction.user.id;
-        activeTickets.set(interaction.channel.id, tInfo);
+  // منع استلام التذكرة إذا كانت مستلمة مسبقاً
+  if (tInfo.claimedBy) {
+    return interaction.reply({
+      content: `⚠️ تم استلام هذه التذكرة مسبقاً بواسطة <@${tInfo.claimedBy}>`,
+      ephemeral: true
+    });
+  }
 
-        await interaction.channel.permissionOverwrites.edit(tInfo.ownerId, { ViewChannel: true, SendMessages: true });
-        await interaction.channel.permissionOverwrites.edit(interaction.user.id, { ViewChannel: true, SendMessages: true });
-        
-        if (supportRoleId) {
-          await interaction.channel.permissionOverwrites.edit(supportRoleId, { ViewChannel: true, SendMessages: false });
-        }
+  const config = ticketConfigs.get(interaction.guild.id) || {};
+  const supportRoleId = config.supportRoleId;
 
-        const oldEmbed = interaction.message.embeds[0];
-        const updatedEmbed = EmbedBuilder.from(oldEmbed)
-          .addFields({ name: '👤 المستلم:', value: `${interaction.user}`, inline: false });
+  // السماح للإداريين أو فريق الدعم فقط
+  if (
+    !interaction.member.permissions.has(PermissionFlagsBits.Administrator) &&
+    (!supportRoleId ||
+      !interaction.member.roles.cache.has(supportRoleId))
+  ) {
+    return interaction.reply({
+      content: '❌ عذراً، أزرار الإدارة مخصصة لفريق الدعم فقط!',
+      ephemeral: true
+    });
+  }
 
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('ticket_claim').setLabel('تم الاستلام ✅').setStyle(ButtonStyle.Success).setDisabled(true),
-          new ButtonBuilder().setCustomId('ticket_call_support').setLabel('استدعاء الدعم 🟢').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق 🗑️').setStyle(ButtonStyle.Danger)
-        );
+  // تسجيل مستلم التذكرة
+  tInfo.claimedBy = interaction.user.id;
+  activeTickets.set(interaction.channel.id, tInfo);
 
-        await interaction.update({ embeds: [updatedEmbed], components: [row] });
-        return interaction.followUp({ content: `✅ قام الإداري ${interaction.user} باستلام التذكرة!` });
+  await interaction.channel.permissionOverwrites.edit(
+    tInfo.ownerId,
+    {
+      ViewChannel: true,
+      SendMessages: true
+    }
+  );
+
+  await interaction.channel.permissionOverwrites.edit(
+    interaction.user.id,
+    {
+      ViewChannel: true,
+      SendMessages: true
+    }
+  );
+
+  if (supportRoleId) {
+    await interaction.channel.permissionOverwrites.edit(
+      supportRoleId,
+      {
+        ViewChannel: true,
+        SendMessages: false
       }
+    );
+  }
+
+  const oldEmbed = interaction.message.embeds[0];
+
+  const updatedEmbed = EmbedBuilder.from(oldEmbed)
+    .addFields({
+      name: '👤 المستلم:',
+      value: `${interaction.user}`,
+      inline: false
+    });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('ticket_claim')
+      .setLabel('تم الاستلام ✅')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(true),
+
+    new ButtonBuilder()
+      .setCustomId('ticket_call_support')
+      .setLabel('استدعاء الدعم 🟢')
+      .setStyle(ButtonStyle.Success),
+
+    new ButtonBuilder()
+      .setCustomId('close_ticket')
+      .setLabel('غلق 🗑️')
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await interaction.update({
+    embeds: [updatedEmbed],
+    components: [row]
+  });
+
+  return interaction.followUp({
+    content: `✅ قام الإداري ${interaction.user} باستلام التذكرة!`
+  });
+}
 
       if (id === 'ticket_call_support') {
-        const config = ticketConfigs.get(interaction.guild.id) || {};
-        const supportRoleId = config.supportRoleId;
-        const mentionText = supportRoleId ? `<@&${supportRoleId}>` : '@everyone';
-        return interaction.reply({ content: `🔔 تم استدعاء فريق الدعم بواسطة ${interaction.user}:${mentionText}` });
-      }
+  const tInfo = activeTickets.get(interaction.channel.id);
+
+  if (!tInfo) {
+    return interaction.reply({
+      content: '❌ هذه التذكرة غير مسجلة.',
+      ephemeral: true
+    });
+  }
+
+  // صاحب التذكرة فقط يستطيع استدعاء الدعم
+  if (interaction.user.id !== tInfo.ownerId) {
+    return interaction.reply({
+      content: '❌ فقط صاحب التذكرة يستطيع استدعاء فريق الدعم.',
+      ephemeral: true
+    });
+  }
+
+  const config = ticketConfigs.get(interaction.guild.id) || {};
+  const supportRoleId = config.supportRoleId;
+
+  if (!supportRoleId) {
+    return interaction.reply({
+      content: '❌ لم يتم تحديد رتبة فريق الدعم.',
+      ephemeral: true
+    });
+  }
+
+  return interaction.reply({
+    content: `🔔 تم استدعاء فريق الدعم بواسطة ${interaction.user} <@&${supportRoleId}>`
+  });
+}
 
       if (id === 'close_ticket') {
         const tInfo = activeTickets.get(interaction.channel.id);
