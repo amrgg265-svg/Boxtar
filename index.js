@@ -1733,9 +1733,8 @@ client.on('interactionCreate', async interaction => {
           await interaction.update({ embeds: [newEmbed], components: [] });
           
           if (targetMember) {
-            targetMember.send(`🎉 مبارك يا عمرو! لقد تم **قبول** تقديمك في **${data.name || 'التقديم'}** وحصلت على الرتبة المخصصة.`).catch(() => {});
-          }
-        } else {
+            targetMember.send(`🎉 مبارك يا ${targetMember.user.username}! لقد تم **قبول** تقديمك في **${data.name || 'التقديم'}** وحصلت على الرتبة المخصصة.`).catch(() => {});
+             } else {
           const oldEmbed = interaction.message.embeds[0];
           const newEmbed = EmbedBuilder.from(oldEmbed)
             .setColor(0xE74C3C)
