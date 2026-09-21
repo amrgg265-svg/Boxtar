@@ -1483,44 +1483,62 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
-      if (id === 'tk_edit_button') {
-  const modal = new ModalBuilder()
-    .setCustomId('tk_modal_edit_button')
-    .setTitle('تعديل اسم ولون زر فتح التكت');
+  if (id === 'tk_edit_button') {
+  try {
+    const modal = new ModalBuilder()
+      .setCustomId('tk_modal_edit_button')
+      .setTitle('تعديل اسم ولون زر فتح التكت');
 
-  const nameInput = new TextInputBuilder()
-    .setCustomId('btn_name_input')
-    .setLabel('اسم زر فتح التذكرة')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
+    const nameInput = new TextInputBuilder()
+      .setCustomId('btn_name_input')
+      .setLabel('اسم زر فتح التذكرة')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
-  const colorSelect = new StringSelectMenuBuilder()
-    .setCustomId('btn_color_input')
-    .setPlaceholder('اختر لون الزر')
-    .setMinValues(1)
-    .setMaxValues(1)
-    .addOptions(
-      {
-        label: 'أزرق',
-        value: 'primary',
-        emoji: '🔵'
-      },
-      {
-        label: 'رمادي',
-        value: 'secondary',
-        emoji: '⚪'
-      },
-      {
-        label: 'أخضر',
-        value: 'success',
-        emoji: '🟢'
-      },
-      {
-        label: 'أحمر',
-        value: 'danger',
-        emoji: '🔴'
-      }
+    const colorSelect = new StringSelectMenuBuilder()
+      .setCustomId('btn_color_input')
+      .setPlaceholder('اختر لون الزر')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        {
+          label: 'أزرق',
+          value: 'primary',
+          emoji: '🔵'
+        },
+        {
+          label: 'رمادي',
+          value: 'secondary',
+          emoji: '⚪'
+        },
+        {
+          label: 'أخضر',
+          value: 'success',
+          emoji: '🟢'
+        },
+        {
+          label: 'أحمر',
+          value: 'danger',
+          emoji: '🔴'
+        }
+      );
+
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel('اسم زر فتح التذكرة')
+        .setTextInputComponent(nameInput),
+
+      new LabelBuilder()
+        .setLabel('لون زر فتح التذكرة')
+        .setStringSelectMenuComponent(colorSelect)
     );
+
+    await interaction.showModal(modal);
+
+  } catch (error) {
+    console.error('❌ خطأ في تعديل زر التكت:', error);
+  }
+}
 
   modal.addLabelComponents(
     new LabelBuilder()
