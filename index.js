@@ -1483,13 +1483,56 @@ client.on('interactionCreate', async interaction => {
       }
 
       if (id === 'tk_edit_button') {
-        const modal = new ModalBuilder().setCustomId('tk_modal_edit_button').setTitle('تعديل اسم ولون زر فتح التكت');
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_name_input').setLabel('اسم زر فتح التذكرة').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_color_input').setLabel('اللون: primary / secondary / success / danger').setStyle(TextInputStyle.Short).setRequired(true))
-        );
-        return await interaction.showModal(modal);
+  const modal = new ModalBuilder()
+    .setCustomId('tk_modal_edit_button')
+    .setTitle('تعديل اسم ولون زر فتح التكت');
+
+  const nameInput = new TextInputBuilder()
+    .setCustomId('btn_name_input')
+    .setLabel('اسم زر فتح التذكرة')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
+
+  const colorSelect = new StringSelectMenuBuilder()
+    .setCustomId('btn_color_input')
+    .setPlaceholder('اختر لون الزر')
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(
+      {
+        label: 'أزرق',
+        value: 'primary',
+        emoji: '🔵'
+      },
+      {
+        label: 'رمادي',
+        value: 'secondary',
+        emoji: '⚪'
+      },
+      {
+        label: 'أخضر',
+        value: 'success',
+        emoji: '🟢'
+      },
+      {
+        label: 'أحمر',
+        value: 'danger',
+        emoji: '🔴'
       }
+    );
+
+  modal.addLabelComponents(
+    new LabelBuilder()
+      .setLabel('اسم زر فتح التذكرة')
+      .setTextInputComponent(nameInput),
+
+    new LabelBuilder()
+      .setLabel('لون زر فتح التذكرة')
+      .setStringSelectMenuComponent(colorSelect)
+  );
+
+  return await interaction.showModal(modal);
+}
 
       if (id === 'tk_set_welcome_msg') {
         const modal = new ModalBuilder().setCustomId('tk_modal_welcome_msg').setTitle('تحديد رسالة فتح التكت');
@@ -1815,7 +1858,7 @@ client.on('interactionCreate', async interaction => {
       // [تم التصحيح هنا بمعالجة الحقول بشكل آمن تماماً]
       if (interaction.customId === 'tk_modal_edit_button') {
         const btnName = interaction.fields.getTextInputValue('btn_name_input');
-        const btnColor = interaction.fields.getTextInputValue('btn_color_input').toLowerCase();
+        const btnColor = interaction.fields.getStringSelectValues('btn_color_input')[0];
         
         let config = ticketConfigs.get(interaction.guild.id) || {};
         config.buttonName = btnName;
