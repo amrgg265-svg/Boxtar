@@ -1483,13 +1483,22 @@ client.on('interactionCreate', async interaction => {
       }
 
       if (id === 'tk_edit_button') {
-        const modal = new ModalBuilder().setCustomId('tk_modal_edit_button').setTitle('تعديل اسم ولون زر فتح التكت');
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_name_input').setLabel('اسم زر فتح التذكرة').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_color_input').setLabel('لون الزر (danger, primary, success, secondary)').setStyle(TextInputStyle.Short).setRequired(true))
-        );
-        return await interaction.showModal(modal);
-      }
+  const modal = new ModalBuilder()
+    .setCustomId('tk_modal_edit_button')
+    .setTitle('تعديل اسم زر فتح التكت');
+
+  const nameInput = new TextInputBuilder()
+    .setCustomId('btn_name_input')
+    .setLabel('اسم زر فتح التذكرة')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(nameInput)
+  );
+
+  return await interaction.showModal(modal);
+}
 
       if (id === 'tk_set_welcome_msg') {
         const modal = new ModalBuilder().setCustomId('tk_modal_welcome_msg').setTitle('تحديد رسالة فتح التكت');
@@ -1814,16 +1823,26 @@ client.on('interactionCreate', async interaction => {
 
       // [التعديل هنا] حفظ اسم ولون زر فتح التكت بناءً على مدخلات المستخدم
             if (interaction.customId === 'tk_modal_edit_button') {
-        const btnName = interaction.fields.getTextInputValue('btn_name_input');
-        const btnColor = interaction.fields.getTextInputValue('btn_color_input').toLowerCase();
-        
-        let config = ticketConfigs.get(interaction.guild.id) || {};
-        config.buttonName = btnName;
-        config.buttonStyle = btnColor;
-        ticketConfigs.set(interaction.guild.id, config);
+  const btnName = interaction.fields.getTextInputValue('btn_name_input');
 
-        return interaction.reply({ content: `✅ تم تحديث اسم الزر إلى (**${btnName}**) ولونه إلى (**${btnColor}**) بنجاح!`, ephemeral: true });
-      }
+  const colorMenu = new StringSelectMenuBuilder()
+    .setCustomId(`tk_button_color_${interaction.user.id}`)
+    .setPlaceholder('اختر لون زر فتح التكت...')
+    .addOptions(
+      { label: 'أزرق 🔵', value: 'primary' },
+      { label: 'رمادي ⚪', value: 'secondary' },
+      { label: 'أخضر 🟢', value: 'success' },
+      { label: 'أحمر 🔴', value: 'danger' }
+    );
+
+  return interaction.reply({
+    content: `✏️ اسم الزر: **${btnName}**\n\n🎨 اختر لون زر فتح التكت:`,
+    components: [
+      new ActionRowBuilder().addComponents(colorMenu)
+    ],
+    ephemeral: true
+  });
+}
 
       if (interaction.customId === 'tk_modal_welcome_msg') {
         const welcomeMsg = interaction.fields.getTextInputValue('welcome_text_input');
@@ -1903,7 +1922,32 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ تم إرسال إجاباتك بنجاح إلى الإدارة بانتظار المراجعة!', ephemeral: true });
       }
     }
+    
+if (interaction.isStringSelectMenu() && interaction.customId.startsWith('tk_button_color_')) {
+  const btnColor = interaction.values[0];
 
+  const parts = interaction.customId.split('_');
+  const userId = parts[3];
+
+  const config = ticketConfigs.get(interaction.guild.id) || {};
+
+  config.buttonStyle = btnColor;
+
+  ticketConfigs.set(interaction.guild.id, config);
+
+  const colorNames = {
+    primary: 'أزرق 🔵',
+    secondary: 'رمادي ⚪',
+    success: 'أخضر 🟢',
+    danger: 'أحمر 🔴'
+  };
+
+  await interaction.update({
+    content: `✅ تم اختيار لون زر فتح التكت: **${colorNames[btnColor]}**`,
+    components: []
+  });
+}
+    
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ticket_rate_')) {
       const parts = interaction.customId.split('_');
       const ownerId = parts[2];
