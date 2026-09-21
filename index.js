@@ -52,6 +52,7 @@ const client = new Client({
   ]
 });
 
+const pendingButtonNames = new Map();
 const afkUsers = new Map();
 const logChannels = new Map();
 const ticketData = new Map();         
@@ -1825,6 +1826,9 @@ client.on('interactionCreate', async interaction => {
             if (interaction.customId === 'tk_modal_edit_button') {
   const btnName = interaction.fields.getTextInputValue('btn_name_input');
 
+  // حفظ اسم الزر مؤقتًا
+  pendingButtonNames.set(interaction.user.id, btnName);
+
   const colorMenu = new StringSelectMenuBuilder()
     .setCustomId(`tk_button_color_${interaction.user.id}`)
     .setPlaceholder('اختر لون زر فتح التكت...')
@@ -1926,14 +1930,26 @@ client.on('interactionCreate', async interaction => {
 if (interaction.isStringSelectMenu() && interaction.customId.startsWith('tk_button_color_')) {
   const btnColor = interaction.values[0];
 
-  const parts = interaction.customId.split('_');
-  const userId = parts[3];
+  // جلب اسم الزر الذي تم إدخاله في المودال
+  const btnName = pendingButtonNames.get(interaction.user.id);
+
+  if (!btnName) {
+    return await interaction.update({
+      content: '❌ انتهت جلسة تعديل الزر. اضغط على "تعديل الزر" وحاول مرة أخرى.',
+      components: []
+    });
+  }
 
   const config = ticketConfigs.get(interaction.guild.id) || {};
 
+  // حفظ الاسم واللون
+  config.buttonName = btnName;
   config.buttonStyle = btnColor;
 
   ticketConfigs.set(interaction.guild.id, config);
+
+  // حذف الاسم المؤقت بعد الحفظ
+  pendingButtonNames.delete(interaction.user.id);
 
   const colorNames = {
     primary: 'أزرق 🔵',
@@ -1943,7 +1959,10 @@ if (interaction.isStringSelectMenu() && interaction.customId.startsWith('tk_butt
   };
 
   await interaction.update({
-    content: `✅ تم اختيار لون زر فتح التكت: **${colorNames[btnColor]}**`,
+    content:
+      `✅ تم تحديث زر فتح التكت بنجاح!\n\n` +
+      `✏️ الاسم: **${btnName}**\n` +
+      `🎨 اللون: **${colorNames[btnColor]}**`,
     components: []
   });
 }
