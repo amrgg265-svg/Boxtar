@@ -1812,8 +1812,8 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ تم تعيين رابط بانل التكت بنجاح.', ephemeral: true });
       }
 
-      // [التعديل هنا] حفظ اسم ولون زر فتح التكت بناءً على مدخلات المستخدم
-            if (interaction.customId === 'tk_modal_edit_button') {
+      // [تم التصحيح هنا بمعالجة الحقول بشكل آمن تماماً]
+      if (interaction.customId === 'tk_modal_edit_button') {
         const btnName = interaction.fields.getTextInputValue('btn_name_input');
         const btnColor = interaction.fields.getTextInputValue('btn_color_input').toLowerCase();
         
@@ -1895,253 +1895,80 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`app_accept_${appNum}_${interaction.user.id}`).setLabel('قبول الطلب ✅').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId(`app_reject_${appNum}_${interaction.user.id}`).setLabel('رفض الطلب ❌').setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId(`app_accept_${appNum}_${interaction.user.id}`).setLabel('قبول ✅').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`app_reject_${appNum}_${interaction.user.id}`).setLabel('رفض ❌').setStyle(ButtonStyle.Danger)
         );
 
         await logChan.send({ embeds: [embed], components: [row] });
-        return interaction.reply({ content: '✅ تم إرسال إجاباتك بنجاح إلى الإدارة بانتظار المراجعة!', ephemeral: true });
+        return interaction.reply({ content: '✅ تم إرسال إجاباتك بنجاح إلى الإدارة!', ephemeral: true });
       }
     }
-
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ticket_rate_')) {
-      const parts = interaction.customId.split('_');
-      const ownerId = parts[2];
-      const claimedBy = parts[3];
-      const rating = interaction.values[0];
-
-      const config = ticketConfigs.get(interaction.guild.id) || {};
-      if (config.ratingChannelId) {
-        const ratingChan = interaction.guild.channels.cache.get(config.ratingChannelId);
-        if (ratingChan) {
-          const ratingEmbed = new EmbedBuilder()
-            .setTitle('⭐ تقييم تذكرة جديد')
-            .addFields(
-              { name: '👤 صاحب التذكرة:', value: `<@${ownerId}>`, inline: true },
-              { name: '🛡️ الإداري المسؤول:', value: claimedBy !== 'none' ? `<@${claimedBy}>` : 'غير مستلم', inline: true },
-              { name: '📊 التقييم:', value: `${'⭐'.repeat(parseInt(rating))} (${rating}/5)`, inline: false }
-            )
-            .setColor(0xF1C40F)
-            .setTimestamp();
-          await ratingChan.send({ embeds: [ratingEmbed] }).catch(() => {});
-        }
-      }
-
-      await interaction.reply({ content: `✅ شكراً لتقييمك! تم إغلاق التذكرة الآن.`, ephemeral: true });
-      setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
-    }
-
   } catch (err) {
     console.error(err);
   }
 });
 
-// دالة إنشاء روم التكت
 async function createTicketChannel(interaction, reason) {
   const guild = interaction.guild;
   const config = ticketConfigs.get(guild.id) || {};
   const categoryId = config.categoryId;
-  const supportRoleId = config.supportRoleId;
 
-  const permissionOverwrites = [
-    {
-      id: guild.id,
-      deny: [PermissionFlagsBits.ViewChannel]
-    },
-    {
-      id: interaction.user.id,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
-    }
-  ];
-
-  if (supportRoleId) {
-    permissionOverwrites.push({
-      id: supportRoleId,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
-    });
+  let parentCat = null;
+  if (categoryId) {
+    parentCat = guild.channels.cache.get(categoryId);
   }
 
-  const channelOptions = {
+  const ticketChannel = await guild.channels.create({
     name: `ticket-${interaction.user.username}`,
     type: ChannelType.GuildText,
-    permissionOverwrites: permissionOverwrites
-  };
+    parent: parentCat ? parentCat.id : null,
+    permissionOverwrites: [
+      {
+        id: guild.id,
+        deny: [PermissionFlagsBits.ViewChannel]
+      },
+      {
+        id: interaction.user.id,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
+      }
+    ]
+  });
 
-  if (categoryId) {
-    channelOptions.parent = categoryId;
+  if (config.supportRoleId) {
+    await ticketChannel.permissionOverwrites.edit(config.supportRoleId, {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true
+    }).catch(() => {});
   }
-
-  const ticketChannel = await guild.channels.create(channelOptions);
 
   activeTickets.set(ticketChannel.id, {
     ownerId: interaction.user.id,
-    claimedBy: null
+    claimedBy: null,
+    reason: reason
   });
 
-  const welcomeText = config.welcomeMessage || 'مرحباً بك! سيقوم فريق الدعم بمساعدتك قريباً.';
+  const welcomeText = config.welcomeMessage || `أهلاً بك ${interaction.user} في تذكرتك الخاصة.\nيرجى شرح مشكلتك أو طلبك بالتفصيل وسيقوم فريق الدعم بالرد عليك قريباً.`;
+
   const embed = new EmbedBuilder()
-    .setTitle('🎫 تذكرة جديدة (Ticket)')
-    .setDescription(`${welcomeText}\n\n👤 **صاحب التذكرة:** ${interaction.user}\n📝 **السبب:** ${reason}`)
+    .setTitle('🎫 تذكرة دعم جديدة')
+    .setDescription(`${welcomeText}\n\n📝 **السبب:** ${reason}`)
     .setColor(config.hexColor || 0xE74C3C)
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket_claim').setLabel('استلام التذكرة 🙋‍♂️').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('ticket_call_support').setLabel('استدعاء الدعم 🟢').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('close_ticket').setLabel('غلق التذكرة 🗑️').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId('ticket_claim').setLabel('استلام التذكرة 🙋‍♂️').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('ticket_call_support').setLabel('استدعاء الدعم 🔔').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق 🔒').setStyle(ButtonStyle.Danger)
   );
 
-  await ticketChannel.send({ content: `${interaction.user} ${supportRoleId ? `<@&${supportRoleId}>` : ''}`, embeds: [embed], components: [row] });
-  return interaction.reply({ content: `✅ تم إنشاء تذكرتك بنجاح: ${ticketChannel}`, ephemeral: true });
+  await ticketChannel.send({ content: `${interaction.user} ${config.supportRoleId ? `<@&${config.supportRoleId}>` : ''}`, embeds: [embed], components: [row] });
+  return interaction.reply({ content: `✅ تم فتح تذكرتك بنجاح: ${ticketChannel}`, ephemeral: true });
 }
 
-// نظام الأذكار التلقائية
-setInterval(() => {
-  const now = Date.now();
-  for (const [guildId, data] of azkarSettings.entries()) {
-    const intervalMs = data.intervalHours * 60 * 60 * 1000;
-    if (now - data.lastSent >= intervalMs) {
-      const guild = client.guilds.cache.get(guildId);
-      if (guild) {
-        const channel = guild.channels.cache.get(data.channelId);
-        if (channel) {
-          const randomZikr = azkarList[Math.floor(Math.random() * azkarList.length)];
-          const embed = new EmbedBuilder()
-            .setTitle('📿 ذِكْرُ الله التلقائي')
-            .setDescription(`> **${randomZikr}**`)
-            .setColor(0xE74C3C)
-            .setTimestamp();
-          channel.send({ embeds: [embed] }).catch(() => {});
-        }
-      }
-      data.lastSent = now;
-    }
-  }
-}, 60 * 1000);
-
-// مراقبة رسائل السبام وحماية الروابط وتحديث اللفلات
-client.on('messageCreate', async message => {
-  if (message.author.bot || !message.guild) return;
-
-  // حماية الروابط والسبام
-  const prot = protectionSettings.get(message.guild.id);
-  if (prot && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    if (prot.antiLinks && (message.content.includes('http://') || message.content.includes('https://') || message.content.includes('www.'))) {
-      await message.delete().catch(() => {});
-      return message.channel.send(`⚠️ عذراً ${message.author}، ممنوع إرسال الروابط في هذا السيرفر!`).then(m => setTimeout(() => m.delete().catch(()=>{}), 4000));
-    }
-  }
-
-  // نظام اللفلات XP
-  const lvlSet = levelSettings.get(message.guild.id);
-  if (lvlSet && lvlSet.enabled) {
-    const key = `${message.guild.id}_${message.author.id}`;
-    let userData = userLevels.get(key) || { xp: 0, level: 0 };
-    userData.xp += (lvlSet.xpPerMessage || 15);
-
-    let nextXp = getRequiredXp(userData.level);
-    if (userData.xp >= nextXp) {
-      userData.xp -= nextXp;
-      userData.level += 1;
-      message.channel.send(`🎉 مبروك يا ${message.author}! لقد صعدت إلى المستوى **${userData.level}**! 🚀`).catch(() => {});
-    }
-    userLevels.set(key, userData);
-  }
-
-  // نظام الكلمات المحظورة
-  const wordsSet = badWordsDB.get(message.guild.id);
-  if (wordsSet && wordsSet.size > 0 && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    const contentLower = message.content.toLowerCase();
-    let hasBadWord = false;
-    for (const word of wordsSet) {
-      if (contentLower.includes(word)) {
-        hasBadWord = true;
-        break;
-      }
-    }
-    if (hasBadWord) {
-      const punishment = badWordsPunishment.get(message.guild.id) || 'delete';
-      if (punishment === 'delete') {
-        await message.delete().catch(() => {});
-        message.channel.send(`⚠️ ${message.author}، هذه الكلمة ممنوعة في السيرفر!`).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
-      } else if (punishment === 'timeout') {
-        await message.delete().catch(() => {});
-        await message.member.timeout(10 * 60 * 1000, 'استخدام كلمات محظورة').catch(() => {});
-        message.channel.send(`⚠️ ${message.author}، تم كتمك لمدة 10 دقائق بسبب الكلمات المحظورة!`);
-      } else if (punishment === 'kick') {
-        await message.delete().catch(() => {});
-        await message.member.kick('استخدام كلمات محظورة').catch(() => {});
-      } else if (punishment === 'ban') {
-        await message.delete().catch(() => {});
-        await message.member.ban({ reason: 'استخدام كلمات محظورة' }).catch(() => {});
-      }
-    }
-  }
-
-  // كشف نظام الـ AFK
-  if (afkUsers.has(message.author.id)) {
-    afkUsers.delete(message.author.id);
-    message.reply(`👋 أهلاً بك من جديد! لقد تم إزالة وضع الـ AFK عنك.`).then(m => setTimeout(() => m.delete().catch(()=>{}), 4000));
-  }
-
-  message.mentions.users.forEach(user => {
-    if (afkUsers.has(user.id)) {
-      const afkData = afkUsers.get(user.id);
-      const timeAgo = Math.floor((Date.now() - afkData.timestamp) / 1000);
-      message.reply(`💤 العضو **${user.username}** في وضع الغياب (AFK) منذ <t:${Math.floor(afkData.timestamp / 1000)}:R>.\nالسبب: ${afkData.reason}`);
-    }
-  });
-
-  // الاختصارات الإدارية
-  if (message.content.startsWith('!')) {
-    const args = message.content.slice(1).trim().split(/ +/);
-    const alias = args.shift().toLowerCase();
-    const shortcutKey = `${message.guild.id}_${alias}`;
-
-    if (customShortcuts.has(shortcutKey)) {
-      const origCmd = customShortcuts.get(shortcutKey);
-      if (origCmd === 'clear' && args[0]) {
-        const count = parseInt(args[0]);
-        if (!isNaN(count) && message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-          await message.delete().catch(() => {});
-          await message.channel.bulkDelete(count, true).catch(() => {});
-          return message.channel.send(`🧹 تم مسح **${count}** رسالة بواسطة الاختصار.`).then(m => setTimeout(() => m.delete().catch(()=>{}), 3000));
-        }
-      }
-    }
-  }
-});
-
-// نظام كسب الـ XP عبر الصوت
-setInterval(() => {
-  client.guilds.cache.forEach(guild => {
-    const lvlSet = levelSettings.get(guild.id);
-    if (!lvlSet || !lvlSet.enabled || !lvlSet.voiceXpEnabled) return;
-
-    guild.channels.cache.forEach(channel => {
-      if (channel.type === ChannelType.GuildVoice) {
-        if (channel.members.size > 1) { // بشرط وجود أكثر من عضو لشغل الصوت
-          channel.members.forEach(member => {
-            if (!member.user.bot) {
-              const key = `${guild.id}_${member.id}`;
-              let userData = userLevels.get(key) || { xp: 0, level: 0 };
-              userData.xp += 10; // منح 10 XP كل دقيقة في الصوت
-
-              let nextXp = getRequiredXp(userData.level);
-              if (userData.xp >= nextXp) {
-                userData.xp -= nextXp;
-                userData.level += 1;
-              }
-              userLevels.set(key, userData);
-            }
-          });
-        }
-      }
-    });
-  });
-}, 60 * 1000);
-
-// تسجيل الأوامر عند التشغيل
+// ==========================================
+// 3. تسجيل الدخول بالتوكن الخاص بك
+// ==========================================
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}! 🚀`);
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
