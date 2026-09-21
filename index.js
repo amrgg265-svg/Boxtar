@@ -1577,7 +1577,7 @@ client.on('interactionCreate', async interaction => {
         );
 
         await interaction.update({ embeds: [updatedEmbed], components: [row] });
-        return interaction.followUp({ content: `✅ قام الإداري ${interaction.user} باستلاستلم التذكرة!` });
+        return interaction.followUp({ content: `✅ قام الإداري ${interaction.user} باستلام التذكرة!` });
       }
 
       if (id === 'ticket_call_support') {
