@@ -1486,7 +1486,7 @@ client.on('interactionCreate', async interaction => {
         const modal = new ModalBuilder().setCustomId('tk_modal_edit_button').setTitle('تعديل اسم ولون زر فتح التكت');
         modal.addComponents(
           new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_name_input').setLabel('اسم زر فتح التذكرة').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_color_input').setLabel('لون الزر (danger, primary, success, secondary)').setStyle(TextInputStyle.Short).setRequired(true))
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('btn_color_input').setLabel('اللون: primary / secondary / success / danger').setStyle(TextInputStyle.Short).setRequired(true))
         );
         return await interaction.showModal(modal);
       }
