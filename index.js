@@ -1721,35 +1721,55 @@ client.on('interactionCreate', async interaction => {
         const data = applicationsData.get(`${interaction.guild.id}_${appNum}`) || {};
 
         if (isAccept) {
-          if (targetMember && data.roleId) {
-            await targetMember.roles.add(data.roleId).catch(() => {});
-          }
+  if (targetMember && data.roleId) {
+    await targetMember.roles.add(data.roleId).catch(() => {});
+  }
 
-          const oldEmbed = interaction.message.embeds[0];
-          const newEmbed = EmbedBuilder.from(oldEmbed)
-            .setColor(0x2ECC71)
-            .addFields({ name: '📊 حالة الطلب:', value: `✅ **تم القبول بواسطة** ${interaction.user}`, inline: false });
+  const oldEmbed = interaction.message.embeds[0];
+  const newEmbed = EmbedBuilder.from(oldEmbed)
+    .setColor(0x2ECC71)
+    .addFields({
+      name: '📊 حالة الطلب:',
+      value: `✅ **تم القبول بواسطة** ${interaction.user}`,
+      inline: false
+    });
 
-          await interaction.update({ embeds: [newEmbed], components: [] });
-          
-          if (targetMember) {
-            targetMember.send(`🎉 مبارك يا ${targetMember.user.username}! لقد تم **قبول** تقديمك في **${data.name || 'التقديم'}** وحصلت على الرتبة المخصصة.`).catch(() => {});
-             } else {
-          const oldEmbed = interaction.message.embeds[0];
-          const newEmbed = EmbedBuilder.from(oldEmbed)
-            .setColor(0xE74C3C)
-            .addFields({ name: '📊 حالة الطلب:', value: `❌ **تم الرفض بواسطة** ${interaction.user}`, inline: false });
+  await interaction.update({
+    embeds: [newEmbed],
+    components: []
+  });
 
-          await interaction.update({ embeds: [newEmbed], components: [] });
+  if (targetMember) {
+    targetMember.send(
+      `🎉 مبارك يا ${targetMember.user.username}! لقد تم **قبول** تقديمك في **${data.name || 'التقديم'}** وحصلت على الرتبة المخصصة.`
+    ).catch(() => {});
+  }
 
-          if (targetMember) {
-            targetMember.send(`⚠️ نأسف لك، لقد تم **رفض** تقديمك في **${data.name || 'التقديم'}**.`).catch(() => {});
-          }
-        }
-        return;
-      }
+} else {
+  const oldEmbed = interaction.message.embeds[0];
+  const newEmbed = EmbedBuilder.from(oldEmbed)
+    .setColor(0xE74C3C)
+    .addFields({
+      name: '📊 حالة الطلب:',
+      value: `❌ **تم الرفض بواسطة** ${interaction.user}`,
+      inline: false
+    });
 
-      if (id.startsWith('set_log_')) {
+  await interaction.update({
+    embeds: [newEmbed],
+    components: []
+  });
+
+  if (targetMember) {
+  targetMember.send(
+    `⚠️ نأسف لك، لقد تم **رفض** تقديمك في **${data.name || 'التقديم'}**.`
+  ).catch(() => {});
+}
+}
+}
+return;
+
+if (id.startsWith('set_log_')) {
         const logType = id.replace('set_log_', '');
         const selectMenu = new ChannelSelectMenuBuilder().setCustomId(`select_channel_${logType}`).setPlaceholder('اختر الروم المخصصة للسجل...').addChannelTypes(ChannelType.GuildText);
         return interaction.reply({ content: `📌 اختر القناة الخاصة بـ (${logType.toUpperCase()}):`, components: [new ActionRowBuilder().addComponents(selectMenu)], ephemeral: true });
