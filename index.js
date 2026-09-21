@@ -1822,18 +1822,44 @@ if (id === 'tk_edit_button') {
         return interaction.reply({ content: '✅ تم تعيين رابط بانل التكت بنجاح.', ephemeral: true });
       }
 
-      // [تم التصحيح هنا بمعالجة الحقول بشكل آمن تماماً]
-      if (interaction.customId === 'tk_modal_edit_button') {
-        const btnName = interaction.fields.getTextInputValue('btn_name_input');
-        const btnColor = interaction.fields.getStringSelectValues('btn_color_input')[0];
-        
-        let config = ticketConfigs.get(interaction.guild.id) || {};
-        config.buttonName = btnName;
-        config.buttonStyle = btnColor;
-        ticketConfigs.set(interaction.guild.id, config);
+      iif (interaction.customId === 'tk_modal_edit_button') {
+  const btnName = interaction.fields.getTextInputValue('btn_name_input');
 
-        return interaction.reply({ content: `✅ تم تحديث اسم الزر إلى (**${btnName}**) ولونه إلى (**${btnColor}**) بنجاح!`, ephemeral: true });
+  const colorMenu = new StringSelectMenuBuilder()
+    .setCustomId(`tk_choose_button_color_${interaction.user.id}_${encodeURIComponent(btnName)}`)
+    .setPlaceholder('اختر لون زر فتح التكت')
+    .addOptions(
+      {
+        label: 'أزرق',
+        value: 'primary',
+        emoji: '🔵'
+      },
+      {
+        label: 'رمادي',
+        value: 'secondary',
+        emoji: '⚪'
+      },
+      {
+        label: 'أخضر',
+        value: 'success',
+        emoji: '🟢'
+      },
+      {
+        label: 'أحمر',
+        value: 'danger',
+        emoji: '🔴'
       }
+    );
+
+  const row = new ActionRowBuilder()
+    .addComponents(colorMenu);
+
+  return await interaction.reply({
+    content: `✏️ اسم الزر الجديد: **${btnName}**\n\n🎨 اختر لون الزر:`,
+    components: [row],
+    ephemeral: true
+  });
+}
 
       if (interaction.customId === 'tk_modal_welcome_msg') {
         const welcomeMsg = interaction.fields.getTextInputValue('welcome_text_input');
