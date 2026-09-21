@@ -1483,15 +1483,22 @@ client.on('interactionCreate', async interaction => {
         return await interaction.showModal(modal);
       }
 
-  if (id === 'tk_edit_button') {
-  console.log('✅ تم الضغط على زر تعديل الزر');
+if (id === 'tk_edit_button') {
+  const modal = new ModalBuilder()
+    .setCustomId('tk_modal_edit_button')
+    .setTitle('تعديل زر فتح التكت');
 
-  await interaction.reply({
-    content: '✅ زر تعديل الزر يعمل ووصل للكود!',
-    ephemeral: true
-  });
+  const nameInput = new TextInputBuilder()
+    .setCustomId('btn_name_input')
+    .setLabel('اسم زر فتح التذكرة')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
 
-  return;
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(nameInput)
+  );
+
+  return await interaction.showModal(modal);
 }
 
       if (id === 'tk_set_welcome_msg') {
