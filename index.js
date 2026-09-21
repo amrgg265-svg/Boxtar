@@ -1484,55 +1484,14 @@ client.on('interactionCreate', async interaction => {
       }
 
   if (id === 'tk_edit_button') {
-  const modal = new ModalBuilder()
-    .setCustomId('tk_modal_edit_button')
-    .setTitle('تعديل اسم ولون زر فتح التكت');
+  console.log('✅ تم الضغط على زر تعديل الزر');
 
-  const nameInput = new TextInputBuilder()
-    .setCustomId('btn_name_input')
-    .setLabel('اسم زر فتح التذكرة')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
+  await interaction.reply({
+    content: '✅ زر تعديل الزر يعمل ووصل للكود!',
+    ephemeral: true
+  });
 
-  const colorSelect = new StringSelectMenuBuilder()
-    .setCustomId('btn_color_input')
-    .setPlaceholder('اختر لون الزر')
-    .setMinValues(1)
-    .setMaxValues(1)
-    .addOptions(
-      {
-        label: 'أزرق',
-        value: 'primary',
-        emoji: '🔵'
-      },
-      {
-        label: 'رمادي',
-        value: 'secondary',
-        emoji: '⚪'
-      },
-      {
-        label: 'أخضر',
-        value: 'success',
-        emoji: '🟢'
-      },
-      {
-        label: 'أحمر',
-        value: 'danger',
-        emoji: '🔴'
-      }
-    );
-
-  modal.addLabelComponents(
-    new LabelBuilder()
-      .setLabel('اسم زر فتح التذكرة')
-      .setTextInputComponent(nameInput),
-
-    new LabelBuilder()
-      .setLabel('لون زر فتح التذكرة')
-      .setStringSelectMenuComponent(colorSelect)
-  );
-
-  return await interaction.showModal(modal);
+  return;
 }
 
       if (id === 'tk_set_welcome_msg') {
